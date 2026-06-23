@@ -1,46 +1,76 @@
 #include <gomoku/Board.hpp>
 
-Board::Board() {
-    reset();
-}
-
-bool Board::isInside(const Position& pos) const {
-    return pos.x >= 0 && pos.x < WIDTH && pos.y >= 0 && pos.y < HEIGHT;
-}
-
-int Board::toIndex(const Position& pos) const {
-    return pos.y * WIDTH + pos.x;
-}
+Board::Board() : blue_(0), red_(0) {}
+Board::~Board() {}
 
 bool Board::isEmpty(const Position& pos) const {
-    return isInside(pos) && cells_[toIndex(pos)] == Stone::EMPTY;
+    int index = toIndex(pos);
+    uint64_t mask = 1ULL << index;
+    return !((blue_ & mask) | (red_ & mask));
 }
 
-bool Board::placeStone(const Position& pos, Stone stone) {
-    if (isInside(pos) && isEmpty(pos)) {
-        cells_[toIndex(pos)] = stone;
-        return true;
-    }
-    return false;
+bool Board::hasBlue(const Position& pos) const {
+    int index = toIndex(pos);
+    return (blue_ >> index) & 1;
 }
 
-void Board::reset() {
-    cells_.fill(Stone::EMPTY);
+bool Board::hasRed(const Position& pos) const {
+    int index = toIndex(pos);
+    return (red_ >> index) & 1;
+}
+
+void Board::placeBlue(const Position& pos) {
+    int index = toIndex(pos);
+    blue_ |= (1ULL << index);
+}
+
+void Board::placeRed(const Position& pos) {
+    int index = toIndex(pos);
+    red_ |= (1ULL << index);
 }
 
 void Board::removeStone(const Position& pos) {
-    if (isInside(pos)) {
-        cells_[toIndex(pos)] = Stone::EMPTY;
-    }
+    int index = toIndex(pos);
+    uint64_t mask = 1ULL << index;
+    blue_ &= ~mask;
+    red_ &= ~mask;
 }
 
-Stone Board::getStone(const Position& pos) const {
-    if (isInside(pos)) {
-        return cells_[toIndex(pos)];
-    }
-    return Stone::EMPTY;
+void Board::reset() {
+    blue_ = 0;
+    red_ = 0;
 }
 
+int Board::countBlueStones() const {
+    return __builtin_popcountll(blue_);
+}
 
+int Board::countRedStones() const {
+    return __builtin_popcountll(red_);
+}
 
-Board::~Board() {}
+uint64_t Board::getHash() const {
+    return blue_ ^ red_;
+}
+
+vector<Position> Board::getBlueStones() const {
+    vector<Position> stones;
+    uint64_t board = blue_;
+    while (board) {
+        int index = __builtin_ctzll(board);
+        stones.push_back(fromIndex(index));
+        board &= board - 1;
+    }
+    return stones;
+}
+
+vector<Position> Board::getRedStones() const {
+    vector<Position> stones;
+    uint64_t board = red_;
+    while (board) {
+        int index = __builtin_ctzll(board);
+        stones.push_back(fromIndex(index));
+        board &= board - 1;
+    }
+    return stones;
+}

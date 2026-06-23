@@ -1,19 +1,26 @@
 NAME = gomoku
+TEST_NAME = run_tests
 
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++20
+CXXFLAGS = -Wall -Wextra -Werror -std=c++20 -O3
 
 INCLUDES = -Iinclude
 OBJ_DIR = obj
 
-SRC = $(shell find src tests -name "*.cpp")
+SRC_GAME = $(shell find src -name "*.cpp")
+SRC_TEST = $(shell find tests -name "*.cpp")
 
-OBJ = $(SRC:%.cpp=$(OBJ_DIR)/%.o)
+OBJ_GAME = $(SRC_GAME:%.cpp=$(OBJ_DIR)/%.o)
+OBJ_TEST = $(SRC_TEST:%.cpp=$(OBJ_DIR)/%.o)
 
 all: $(NAME)
 
-$(NAME): $(OBJ)
-	$(CXX) $(CXXFLAGS) $(OBJ) -o $(NAME)
+$(NAME): $(OBJ_GAME)
+	$(CXX) $(CXXFLAGS) $(OBJ_GAME) -o $(NAME)
+
+test: $(OBJ_TEST) $(filter-out $(OBJ_DIR)/src/main.o, $(OBJ_GAME))
+	$(CXX) $(CXXFLAGS) $(OBJ_TEST) $(filter-out $(OBJ_DIR)/src/main.o, $(OBJ_GAME)) -o $(TEST_NAME)
+	./$(TEST_NAME)
 
 $(OBJ_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)
@@ -23,11 +30,11 @@ clean:
 	rm -rf $(OBJ_DIR)
 
 fclean: clean
-	rm -f $(NAME)
+	rm -f $(NAME) $(TEST_NAME)
 
 re: fclean all
 
 run: all
 	./$(NAME)
 
-.PHONY: all clean fclean re run
+.PHONY: all clean fclean re run test

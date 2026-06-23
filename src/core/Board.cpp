@@ -7,143 +7,44 @@ Board::Board() {
 Board::~Board() {}
 
 bool Board::isEmpty(const Position& pos) const {
-    if (pos.x < 0 || pos.x >= HEIGHT || pos.y < 0 || pos.y >= WIDTH)
-        return false;
-    
-    int idx = toIndex(pos);
-    int board_idx, bit_idx;
-    getIndices(idx, board_idx, bit_idx);
-    
-    uint64_t blue_bit = (blue_[board_idx] >> bit_idx) & 1;
-    uint64_t red_bit = (red_[board_idx] >> bit_idx) & 1;
-    
-    return !blue_bit && !red_bit;
+    if (!isValid(pos)) return false;
+    return getState(toIndex(pos)) == Stone::EMPTY;
 }
 
-bool Board::hasBlue(const Position& pos) const {
-    if (pos.x < 0 || pos.x >= HEIGHT || pos.y < 0 || pos.y >= WIDTH)
-        return false;
-    
-    int idx = toIndex(pos);
-    int board_idx, bit_idx;
-    getIndices(idx, board_idx, bit_idx);
-    
-    return (blue_[board_idx] >> bit_idx) & 1;
+bool Board::hasStone(const Position& pos, Stone color) const {
+    if (!isValid(pos)) return false;
+    return getState(toIndex(pos)) == color;
 }
 
-bool Board::hasRed(const Position& pos) const {
-    if (pos.x < 0 || pos.x >= HEIGHT || pos.y < 0 || pos.y >= WIDTH)
-        return false;
-    
-    int idx = toIndex(pos);
-    int board_idx, bit_idx;
-    getIndices(idx, board_idx, bit_idx);
-    
-    return (red_[board_idx] >> bit_idx) & 1;
-}
-
-void Board::placeBlue(const Position& pos) {
-    if (pos.x < 0 || pos.x >= HEIGHT || pos.y < 0 || pos.y >= WIDTH)
-        return;
-    
-    int idx = toIndex(pos);
-    int board_idx, bit_idx;
-    getIndices(idx, board_idx, bit_idx);
-    
-    blue_[board_idx] |= (1ULL << bit_idx);
-}
-
-void Board::placeRed(const Position& pos) {
-    if (pos.x < 0 || pos.x >= HEIGHT || pos.y < 0 || pos.y >= WIDTH)
-        return;
-    
-    int idx = toIndex(pos);
-    int board_idx, bit_idx;
-    getIndices(idx, board_idx, bit_idx);
-    
-    red_[board_idx] |= (1ULL << bit_idx);
+void Board::placeStone(const Position& pos, Stone color) {
+    if (!isValid(pos)) return;
+    setState(toIndex(pos), color);
 }
 
 void Board::removeStone(const Position& pos) {
-    if (pos.x < 0 || pos.x >= HEIGHT || pos.y < 0 || pos.y >= WIDTH)
-        return;
-    
-    int idx = toIndex(pos);
-    int board_idx, bit_idx;
-    getIndices(idx, board_idx, bit_idx);
-    
-    uint64_t mask = 1ULL << bit_idx;
-    blue_[board_idx] &= ~mask;
-    red_[board_idx] &= ~mask;
+    if (!isValid(pos)) return;
+    setState(toIndex(pos), Stone::EMPTY);
 }
 
 void Board::reset() {
-    for (int i = 0; i < NUM_BITBOARDS; i++) {
-        blue_[i] = 0;
-        red_[i] = 0;
-    }
+    board_.fill(0); 
 }
 
-int Board::countBlueStones() const {
+int Board::countStones(Stone color) const {
     int count = 0;
-    for (int i = 0; i < NUM_BITBOARDS; i++) {
-        count += __builtin_popcountll(blue_[i]);
+    for (int i = 0; i < SIZE; i++) {
+        if (getState(i) == color) count++;
     }
     return count;
 }
 
-int Board::countRedStones() const {
-    int count = 0;
-    for (int i = 0; i < NUM_BITBOARDS; i++) {
-        count += __builtin_popcountll(red_[i]);
-    }
-    return count;
-}
-
-vector<Position> Board::getBlueStones() const {
+vector<Position> Board::getStones(Stone color) const {
     vector<Position> stones;
-    
-    for (int board_idx = 0; board_idx < NUM_BITBOARDS; board_idx++) {
-        uint64_t bits = blue_[board_idx];
-        
-        while (bits) {
-            int bit_idx = __builtin_ctzll(bits);  
-            int idx = board_idx * 64 + bit_idx;
-            
-            if (idx < SIZE)
-                stones.push_back(fromIndex(idx));
-            
-            bits &= bits - 1;  
+    stones.reserve(SIZE / 2); 
+    for (int i = 0; i < SIZE; i++) {
+        if (getState(i) == color) {
+            stones.push_back(fromIndex(i));
         }
     }
-    
     return stones;
-}
-
-vector<Position> Board::getRedStones() const {
-    vector<Position> stones;
-    
-    for (int board_idx = 0; board_idx < NUM_BITBOARDS; board_idx++) {
-        uint64_t bits = red_[board_idx];
-        
-        while (bits) {
-            int bit_idx = __builtin_ctzll(bits);  
-            int idx = board_idx * 64 + bit_idx;
-            
-            if (idx < SIZE)
-                stones.push_back(fromIndex(idx));
-            
-            bits &= bits - 1;  
-        }
-    }
-    
-    return stones;
-}
-
-uint64_t Board::getHash() const {
-    uint64_t hash = 0;
-    for (int i = 0; i < NUM_BITBOARDS; i++) {
-        hash ^= blue_[i] ^ red_[i]; 
-    }
-    return hash;
 }

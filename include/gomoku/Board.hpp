@@ -1,9 +1,9 @@
+// include/gomoku/Board.hpp
 #pragma once
-#include <cstdint>
+#include <array>
 #include <vector>
+#include <cstdint>
 #include "Position.hpp"
-#include <bitset>
-
 using namespace std;
 
 class Board {
@@ -11,7 +11,7 @@ class Board {
         static constexpr int WIDTH = 19;
         static constexpr int HEIGHT = 19;
         static constexpr int SIZE = 361;
-
+        static constexpr int NUM_BITBOARDS = 6;  // 6 * 64 = 384 bits
         
         Board();
         ~Board();
@@ -28,15 +28,11 @@ class Board {
         
         int countBlueStones() const;
         int countRedStones() const;
-        uint64_t getHash() const;
         
         vector<Position> getBlueStones() const;
         vector<Position> getRedStones() const;
         
-        // uint64_t getBlue() const { return blue_; }
-        // uint64_t getRed() const { return red_; }
-        // void setBlue(uint64_t b) { blue_ = b; }
-        // void setRed(uint64_t r) { red_ = r; }
+        uint64_t getHash() const;
         
     private:
         int toIndex(const Position& pos) const {
@@ -47,6 +43,11 @@ class Board {
             return {index / WIDTH, index % WIDTH};
         }
         
-        bitset<SIZE> blue_ ;// Blue stones
-        bitset<SIZE> red_ ;   // Red stones
+        void getIndices(int pos, int& board_idx, int& bit_idx) const {
+            board_idx = pos / 64;
+            bit_idx = pos % 64; 
+        }
+        
+        array<uint64_t, NUM_BITBOARDS> blue_;
+        array<uint64_t, NUM_BITBOARDS> red_;
 };

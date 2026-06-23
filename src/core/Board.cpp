@@ -4,43 +4,47 @@ Board::Board() {
     reset();
 }
 
-bool Board::isInside(const Position& pos) const {
-    return pos.x >= 0 && pos.x < WIDTH && pos.y >= 0 && pos.y < HEIGHT;
-}
-
-int Board::toIndex(const Position& pos) const {
-    return pos.y * WIDTH + pos.x;
-}
+Board::~Board() {}
 
 bool Board::isEmpty(const Position& pos) const {
-    return isInside(pos) && cells_[toIndex(pos)] == Stone::EMPTY;
+    if (!isValid(pos)) return false;
+    return getState(toIndex(pos)) == Stone::EMPTY;
 }
 
-bool Board::placeStone(const Position& pos, Stone stone) {
-    if (isInside(pos) && isEmpty(pos)) {
-        cells_[toIndex(pos)] = stone;
-        return true;
-    }
-    return false;
+bool Board::hasStone(const Position& pos, Stone color) const {
+    if (!isValid(pos)) return false;
+    return getState(toIndex(pos)) == color;
 }
 
-void Board::reset() {
-    cells_.fill(Stone::EMPTY);
+void Board::placeStone(const Position& pos, Stone color) {
+    if (!isValid(pos)) return;
+    setState(toIndex(pos), color);
 }
 
 void Board::removeStone(const Position& pos) {
-    if (isInside(pos)) {
-        cells_[toIndex(pos)] = Stone::EMPTY;
-    }
+    if (!isValid(pos)) return;
+    setState(toIndex(pos), Stone::EMPTY);
 }
 
-Stone Board::getStone(const Position& pos) const {
-    if (isInside(pos)) {
-        return cells_[toIndex(pos)];
-    }
-    return Stone::EMPTY;
+void Board::reset() {
+    board_.fill(0); 
 }
 
+int Board::countStones(Stone color) const {
+    int count = 0;
+    for (int i = 0; i < SIZE; i++) {
+        if (getState(i) == color) count++;
+    }
+    return count;
+}
 
-
-Board::~Board() {}
+vector<Position> Board::getStones(Stone color) const {
+    vector<Position> stones;
+    stones.reserve(SIZE / 2); 
+    for (int i = 0; i < SIZE; i++) {
+        if (getState(i) == color) {
+            stones.push_back(fromIndex(i));
+        }
+    }
+    return stones;
+}

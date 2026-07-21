@@ -21,7 +21,7 @@ class Board {
         bool isEmpty(const Position& pos) const;
         bool hasStone(const Position& pos, Stone color) const;
         
-        void placeStone(const Position& pos, Stone color);
+        bool placeStone(const Position& pos, Stone color);
         void removeStone(const Position& pos);
         
         void reset();

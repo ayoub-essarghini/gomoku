@@ -16,9 +16,12 @@ bool Board::hasStone(const Position& pos, Stone color) const {
     return getState(toIndex(pos)) == color;
 }
 
-void Board::placeStone(const Position& pos, Stone color) {
-    if (!isValid(pos)) return;
+bool Board::placeStone(const Position& pos, Stone color) {
+    if (!isValid(pos)) return false;
+    if (!isEmpty(pos)) return false;
+    if (color == Stone::EMPTY) return false;
     setState(toIndex(pos), color);
+    return true;
 }
 
 void Board::removeStone(const Position& pos) {

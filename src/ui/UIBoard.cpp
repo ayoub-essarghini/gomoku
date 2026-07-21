@@ -1,5 +1,7 @@
 #include <gomoku/ui/UIBoard.hpp>
-
+#include <gomoku/Rules.hpp>
+#include <iostream>
+#include <cmath>
 namespace
 {
     constexpr float BOARD_OFFSET_X = 40.f;
@@ -12,32 +14,36 @@ namespace
 UIBoard::UIBoard()
 {
     board_ = Board();
-   
+    resetGameState();
 }
 
 void UIBoard::resetGameState()
 {
     board_.reset();
+    openingManager_.reset(ruleVariant_);
     currentTurn_ = Stone::BLACK;
     mousePressed_ = false;
     gameOver_ = false;
     blackCaptures_ = 0;
     whiteCaptures_ = 0;
     lastAiTimeMs_ = 0.f;
+    statusMessage_ = "Game in progress";
+    winnerName_ = "";
 }
 
 std::string UIBoard::getWinnerName() const
 {
+    if (!winnerName_.empty())
+        return winnerName_;
     return currentTurn_ == Stone::BLACK ? "White" : "Black";
 }
 
 void UIBoard::init()
 {
     window_.create(sf::VideoMode({1100u, 860u}),
-                   "Gomoku",
-                   sf::Style::Titlebar | sf::Style::Close
+                   "Gomoku Engine",
+                   sf::Style::Titlebar | sf::Style::Close);
 
-    );
     if (!font_.openFromFile("src/assets/font/retro_gaming.ttf"))
     {
         std::cerr << "Failed to load font\n";
@@ -52,14 +58,13 @@ void UIBoard::init()
             if (event->is<sf::Event::Closed>())
             {
                 window_.close();
-                return ;
+                return;
             }
             if (const auto *mouse = event->getIf<sf::Event::MouseButtonPressed>())
             {
                 if (mouse->button == sf::Mouse::Button::Left)
                 {
                     mousePressed_ = true;
-
                     auto pos = sf::Mouse::getPosition(window_);
                     if (screen_ == Screen::ModeSelect)
                         handleModeSelectClick(pos);
@@ -91,12 +96,72 @@ void UIBoard::init()
     }
 }
 
+
+bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
+{
+    // [ New Game ] Button Area
+    if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 460 && mousePos.y <= 490)
+    {
+        resetGameState();
+        return true;
+    }
+
+    // [ Mode ] Button Area
+    if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 540 && mousePos.y <= 570)
+    {
+        screen_ = Screen::ModeSelect;
+        // resetGameState();
+        return true;
+    }
+
+    // Cycle Game Rule Variant Area (y: 180 ~ 205)
+    if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 180 && mousePos.y <= 205)
+    {
+        uint8_t nextRule = (static_cast<uint8_t>(ruleVariant_) + 1) % 5;
+        ruleVariant_ = static_cast<RuleVariant>(nextRule);
+        // resetGameState();
+        return true;
+    }
+
+    // Swap2 Decision Phase Button Interactions
+    if (ruleVariant_ == RuleVariant::SWAP2 && !openingManager_.isOpeningFinished())
+    {
+        if (openingManager_.getSwap2Phase() == Swap2Phase::PLAYER2_CHOICE)
+        {
+            if (mousePos.y >= 600 && mousePos.y <= 625)
+            {
+                openingManager_.processSwap2Choice(1, currentTurn_);
+                statusMessage_ = "P2: Stay White";
+            }
+            else if (mousePos.y >= 630 && mousePos.y <= 655)
+            {
+                openingManager_.processSwap2Choice(2, currentTurn_);
+                statusMessage_ = "P2: Swapped to Black";
+            }
+            else if (mousePos.y >= 660 && mousePos.y <= 685)
+            {
+                openingManager_.processSwap2Choice(3, currentTurn_);
+                statusMessage_ = "P2: Added 2 Stones";
+            }
+            return true;
+        }
+    }
+
+    return false;
+}
+
 bool UIBoard::handleClick(sf::Vector2i mousePos)
 {
     if (gameOver_)
         return false;
-    constexpr int maxIndex = 18;
 
+    // Route panel interaction
+    if (mousePos.x >= 800)
+    {
+        return handlePanelClick(mousePos);
+    }
+
+    constexpr int maxIndex = 18;
     int col = static_cast<int>(std::round((mousePos.x - BOARD_OFFSET_X) / CELL_SIZE));
     int row = static_cast<int>(std::round((mousePos.y - BOARD_OFFSET_Y) / CELL_SIZE));
 
@@ -104,11 +169,62 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
         return false;
 
     Position boardPos{row, col};
+    int currentMoveCount = board_.countStones(Stone::BLACK) + board_.countStones(Stone::WHITE) + 1;
+
+    // 1. Validate Pro Rule Conditions
+    if (ruleVariant_ == RuleVariant::PRO && !RuleChecker::isValidProMove(currentMoveCount, boardPos))
+    {
+        statusMessage_ = (currentMoveCount == 1) ? "Pro: Move 1 must be center!"
+                                                 : "Pro: Move 3 outside 5x5 center!";
+        return false;
+    }
+
+    // 2. Validate Renju Fouls (Black Only)
+    if (ruleVariant_ == RuleVariant::RENJU && currentTurn_ == Stone::BLACK)
+    {
+        if (RuleChecker::isRenjuFoul(board_, boardPos))
+        {
+            gameOver_ = true;
+            winnerName_ = "White";
+            statusMessage_ = "Foul! Black loses.";
+            return false;
+        }
+    }
 
     if (!board_.placeStone(boardPos, currentTurn_))
         return false;
 
-    currentTurn_ = currentTurn_ == Stone::BLACK ? Stone::WHITE : Stone::BLACK;
+    Bitboard currentBB = RuleChecker::extractBitboard(board_, currentTurn_);
+
+    if (RuleChecker::hasFiveInARow(currentBB))
+    {
+        if (ruleVariant_ == RuleVariant::RENJU && currentTurn_ == Stone::BLACK && RuleChecker::hasOverline(currentBB))
+        {
+            gameOver_ = true;
+            winnerName_ = "White";
+            statusMessage_ = "Foul: Black created Overline (6+)";
+        }
+        else
+        {
+            gameOver_ = true;
+            winnerName_ = (currentTurn_ == Stone::BLACK) ? "Black" : "White";
+            statusMessage_ = winnerName_ + " Wins!";
+        }
+        return true;
+    }
+
+    // Check Board Full Draw Condition
+    if (currentMoveCount == 361)
+    {
+        gameOver_ = true;
+        winnerName_ = "None";
+        statusMessage_ = "Draw Game!";
+        return true;
+    }
+
+    // Turn transition
+    currentTurn_ = (currentTurn_ == Stone::BLACK) ? Stone::WHITE : Stone::BLACK;
+    statusMessage_ = "Game in progress";
     return true;
 }
 
@@ -119,6 +235,7 @@ void UIBoard::drawBoard()
     boardBg.setFillColor(sf::Color(222, 184, 135));
     window_.draw(boardBg);
     drawLines();
+
     for (const auto &pos : board_.getStones(Stone::BLACK))
         drawStone(pos, Stone::BLACK);
 
@@ -131,31 +248,25 @@ void UIBoard::drawLines()
     for (int i = 0; i < 19; ++i)
     {
         float x = BOARD_OFFSET_X + i * CELL_SIZE;
-
         sf::Vertex line[] = {
-            sf::Vertex(sf::Vector2f(x, BOARD_OFFSET_Y), sf::Color::Black),
-            sf::Vertex(sf::Vector2f(x, BOARD_OFFSET_Y + BOARD_PIXEL_SIZE), sf::Color::Black)};
-
+            {sf::Vector2f(x, BOARD_OFFSET_Y), sf::Color::Black},
+            {sf::Vector2f(x, BOARD_OFFSET_Y + BOARD_PIXEL_SIZE), sf::Color::Black}};
         window_.draw(line, 2, sf::PrimitiveType::Lines);
     }
 
     for (int i = 0; i < 19; ++i)
     {
         float y = BOARD_OFFSET_Y + i * CELL_SIZE;
-
         sf::Vertex line[] = {
-            sf::Vertex(sf::Vector2f(BOARD_OFFSET_X, y), sf::Color::Black),
-            sf::Vertex(sf::Vector2f(BOARD_OFFSET_X + BOARD_PIXEL_SIZE, y), sf::Color::Black)};
-
+            {sf::Vector2f(BOARD_OFFSET_X, y), sf::Color::Black},
+            {sf::Vector2f(BOARD_OFFSET_X + BOARD_PIXEL_SIZE, y), sf::Color::Black}};
         window_.draw(line, 2, sf::PrimitiveType::Lines);
     }
 }
 
 void UIBoard::drawStone(const Position &pos, Stone color)
 {
-
     sf::CircleShape stone(STONE_RADIUS);
-
     float px = BOARD_OFFSET_X + pos.y * CELL_SIZE;
     float py = BOARD_OFFSET_Y + pos.x * CELL_SIZE;
 
@@ -184,21 +295,51 @@ void UIBoard::drawPanel()
 
     std::string turn = currentTurn_ == Stone::BLACK ? "Black" : "White";
     std::string mode = mode_ == GameMode::HumanVsHuman ? "Human vs Human" : "Human vs AI";
+    
+    std::string ruleStr = "Standard";
+    if (ruleVariant_ == RuleVariant::PRO) ruleStr = "Pro";
+    else if (ruleVariant_ == RuleVariant::SWAP) ruleStr = "Swap";
+    else if (ruleVariant_ == RuleVariant::SWAP2) ruleStr = "Swap2";
+    else if (ruleVariant_ == RuleVariant::RENJU) ruleStr = "Renju";
 
     drawText("Gomoku", 830.f, 40.f, 32);
-    drawText("Turn: " + turn, 830.f, 100.f, 22);
-    drawText("Mode: " + mode, 830.f, 140.f, 18);
 
-    drawText("Captures", 830.f, 200.f, 22);
-    drawText("Black: " + std::to_string(blackCaptures_), 830.f, 235.f, 18);
-    drawText("White: " + std::to_string(whiteCaptures_), 830.f, 265.f, 18);
+    if (gameOver_)
+    {
+        drawText("GAME OVER", 830.f, 95.f, 22);
+        drawText("Winner: " + getWinnerName(), 830.f, 125.f, 18);
+    }
+    else
+    {
+        drawText("Turn: " + turn, 830.f, 100.f, 22);
+    }
 
-    drawText("AI time: " + std::to_string(static_cast<int>(lastAiTimeMs_)) + " ms", 830.f, 330.f, 18);
-    drawText("Suggestion: --", 830.f, 370.f, 18);
+    drawText("Mode: " + mode, 830.f, 150.f, 18);
+    drawText("[ Rule: " + ruleStr + " ]", 830.f, 185.f, 18);
+    drawText("Status: " + statusMessage_, 830.f, 215.f, 14);
+
+    drawText("Captures", 830.f, 250.f, 22);
+    drawText("Black: " + std::to_string(blackCaptures_), 830.f, 285.f, 18);
+    drawText("White: " + std::to_string(whiteCaptures_), 830.f, 315.f, 18);
+
+    drawText("AI time: " + std::to_string(static_cast<int>(lastAiTimeMs_)) + " ms", 830.f, 370.f, 18);
+    drawText("Suggestion: --", 830.f, 400.f, 18);
 
     drawText("[ New Game ]", 830.f, 460.f, 20);
     drawText("[ Suggest Move ]", 830.f, 500.f, 20);
     drawText("[ Mode ]", 830.f, 540.f, 20);
+
+    // Render Swap2 options inside side panel when active
+    if (ruleVariant_ == RuleVariant::SWAP2 && !openingManager_.isOpeningFinished())
+    {
+        if (openingManager_.getSwap2Phase() == Swap2Phase::PLAYER2_CHOICE)
+        {
+            drawText("-- Swap2 Options --", 830.f, 580.f, 16);
+            drawText("> Stay White", 830.f, 605.f, 16);
+            drawText("> Swap Colors", 830.f, 635.f, 16);
+            drawText("> Add 2 Stones", 830.f, 665.f, 16);
+        }
+    }
 }
 
 bool UIBoard::isInsideRect(sf::Vector2i mousePos, const sf::FloatRect &rect) const
@@ -230,6 +371,7 @@ bool UIBoard::handleModeSelectClick(sf::Vector2i mousePos)
     {
         mode_ = GameMode::HumanVsHuman;
         screen_ = Screen::Game;
+        resetGameState();
         return true;
     }
 
@@ -237,6 +379,7 @@ bool UIBoard::handleModeSelectClick(sf::Vector2i mousePos)
     {
         mode_ = GameMode::HumanVsAI;
         screen_ = Screen::Game;
+        resetGameState();
         return true;
     }
 
@@ -287,8 +430,6 @@ void UIBoard::drawModeSelect()
     window_.draw(humanVsAiText);
 }
 
-// Particles effects
-
 void UIBoard::initParticles()
 {
     particles_.clear();
@@ -296,7 +437,6 @@ void UIBoard::initParticles()
     for (int i = 0; i < 60; ++i)
     {
         Particle p;
-
         p.position = sf::Vector2f(
             static_cast<float>(std::rand() % 1100),
             static_cast<float>(std::rand() % 860));
@@ -306,7 +446,6 @@ void UIBoard::initParticles()
             0.1f + static_cast<float>(std::rand() % 30) / 100.f);
 
         p.radius = 1.f + static_cast<float>(std::rand() % 3);
-
         p.color = sf::Color(222, 184, 135, 120);
 
         particles_.push_back(p);

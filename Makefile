@@ -2,10 +2,14 @@ NAME = gomoku
 TEST_NAME = run_tests
 
 CXX = c++
-CXXFLAGS = -Wall -Wextra -Werror -std=c++20 -O3 #-lsfml-graphics -lsfml-window -lsfml-system
+CXXFLAGS = -Wall -Wextra -Werror -std=c++20 -O3 -DSFML_STATIC
 
-SFML_CFLAGS := $(shell pkg-config --cflags sfml-graphics sfml-window sfml-system)
-SFML_LIBS := $(shell pkg-config --libs sfml-graphics sfml-window sfml-system)
+LOCAL_PREFIX = /home/hlakhal-/local
+
+SFML_CFLAGS := -I$(LOCAL_PREFIX)/include $(shell pkg-config --cflags freetype2 2>/dev/null)
+SFML_LIBS   := -L$(LOCAL_PREFIX)/lib \
+               -lsfml-graphics-s -lsfml-window-s -lsfml-system-s \
+               -lGL -lfreetype -lX11 -lXrandr -lXcursor -lXi -ludev
 
 INCLUDES = -Iinclude
 OBJ_DIR = obj
@@ -21,9 +25,9 @@ all: $(NAME)
 $(NAME): $(OBJ_GAME)
 	$(CXX) $(CXXFLAGS) $(OBJ_GAME) -o $(NAME) $(SFML_LIBS)
 
-test: $(OBJ_TEST) $(filter-out $(OBJ_DIR)/src/main.o, $(OBJ_GAME))
-	$(CXX) $(CXXFLAGS) $(OBJ_TEST) $(filter-out $(OBJ_DIR)/src/main.o, $(OBJ_GAME)) -o $(TEST_NAME)
-	./$(TEST_NAME) $(SFML_LIBS)
+test: $(OBJ_TEST) $(filter-out $(OBJ_DIR)/src/app/main.o, $(OBJ_GAME))
+	$(CXX) $(CXXFLAGS) $(OBJ_TEST) $(filter-out $(OBJ_DIR)/src/app/main.o, $(OBJ_GAME)) -o $(TEST_NAME) $(SFML_LIBS)
+	./$(TEST_NAME)
 
 $(OBJ_DIR)/%.o: %.cpp
 	@mkdir -p $(dir $@)

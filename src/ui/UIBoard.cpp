@@ -18,14 +18,15 @@ UIBoard::UIBoard()
 void UIBoard::init()
 {
     window_.create(sf::VideoMode({1100u, 860u}),
-     "Gomoku",
-    sf::Style::Titlebar | sf::Style::Close
+                   "Gomoku",
+                   sf::Style::Titlebar | sf::Style::Close
 
     );
     if (!font_.openFromFile("src/assets/font/retro_gaming.ttf"))
     {
         std::cerr << "Failed to load font\n";
     }
+    initParticles();
     window_.setFramerateLimit(60);
 
     while (window_.isOpen())
@@ -35,20 +36,40 @@ void UIBoard::init()
             if (event->is<sf::Event::Closed>())
             {
                 window_.close();
+                return ;
             }
             if (const auto *mouse = event->getIf<sf::Event::MouseButtonPressed>())
             {
                 if (mouse->button == sf::Mouse::Button::Left)
                 {
+                    mousePressed_ = true;
+
                     auto pos = sf::Mouse::getPosition(window_);
-                    handleClick(pos);
+                    if (screen_ == Screen::ModeSelect)
+                        handleModeSelectClick(pos);
+                    else
+                        handleClick(pos);
+                }
+            }
+            if (const auto *mouse = event->getIf<sf::Event::MouseButtonReleased>())
+            {
+                if (mouse->button == sf::Mouse::Button::Left)
+                {
+                    mousePressed_ = false;
                 }
             }
         }
-
+        mousePosition_ = sf::Mouse::getPosition(window_);
         window_.clear();
-        drawBoard();
-        drawPanel();
+        if (screen_ == Screen::ModeSelect)
+        {
+            drawModeSelect();
+        }
+        else
+        {
+            drawBoard();
+            drawPanel();
+        }
 
         window_.display();
     }
@@ -130,7 +151,7 @@ void UIBoard::drawStone(const Position &pos, Stone color)
     window_.draw(stone);
 }
 
-void UIBoard::drawText(const std::string& text, float x, float y, unsigned int size)
+void UIBoard::drawText(const std::string &text, float x, float y, unsigned int size)
 {
     sf::Text label(font_, text, size);
     label.setFillColor(sf::Color(245, 245, 245));
@@ -164,8 +185,148 @@ void UIBoard::drawPanel()
     drawText("[ Mode ]", 830.f, 540.f, 20);
 }
 
-UIBoard::~UIBoard()
+bool UIBoard::isInsideRect(sf::Vector2i mousePos, const sf::FloatRect &rect) const
 {
-    window_.close();
+    return rect.contains(sf::Vector2f(
+        static_cast<float>(mousePos.x),
+        static_cast<float>(mousePos.y)));
 }
 
+sf::Color UIBoard::getButtonColor(const sf::FloatRect &rect) const
+{
+    bool hovered = isInsideRect(mousePosition_, rect);
+
+    if (hovered && mousePressed_)
+        return sf::Color(170, 130, 85);
+
+    if (hovered)
+        return sf::Color(238, 200, 145);
+
+    return sf::Color(222, 184, 135);
+}
+
+bool UIBoard::handleModeSelectClick(sf::Vector2i mousePos)
+{
+    sf::FloatRect humanVsHumanButton({350.f, 320.f}, {400.f, 70.f});
+    sf::FloatRect humanVsAiButton({350.f, 420.f}, {400.f, 70.f});
+
+    if (isInsideRect(mousePos, humanVsHumanButton))
+    {
+        mode_ = GameMode::HumanVsHuman;
+        screen_ = Screen::Game;
+        return true;
+    }
+
+    if (isInsideRect(mousePos, humanVsAiButton))
+    {
+        mode_ = GameMode::HumanVsAI;
+        screen_ = Screen::Game;
+        return true;
+    }
+
+    return false;
+}
+
+void UIBoard::drawModeSelect()
+{
+    window_.clear(sf::Color(28, 32, 36));
+
+    updateParticles();
+    drawParticles();
+
+    sf::RectangleShape titleBar(sf::Vector2f(1100.f, 140.f));
+    titleBar.setPosition({0.f, 0.f});
+    titleBar.setFillColor(sf::Color(38, 43, 48));
+    window_.draw(titleBar);
+
+    drawText("Gomoku", 420.f, 45.f, 48);
+    drawText("Choose Mode", 430.f, 190.f, 28);
+
+    sf::FloatRect humanVsHumanRect({350.f, 320.f}, {400.f, 70.f});
+
+    sf::RectangleShape humanVsHumanButton(sf::Vector2f(400.f, 70.f));
+    humanVsHumanButton.setPosition({350.f, 320.f});
+    humanVsHumanButton.setFillColor(getButtonColor(humanVsHumanRect));
+    humanVsHumanButton.setOutlineThickness(2.f);
+    humanVsHumanButton.setOutlineColor(sf::Color(245, 245, 245));
+    window_.draw(humanVsHumanButton);
+
+    sf::FloatRect humanVsAiRect({350.f, 420.f}, {400.f, 70.f});
+
+    sf::RectangleShape humanVsAiButton(sf::Vector2f(400.f, 70.f));
+    humanVsAiButton.setPosition({350.f, 420.f});
+    humanVsAiButton.setFillColor(getButtonColor(humanVsAiRect));
+    humanVsAiButton.setOutlineThickness(2.f);
+    humanVsAiButton.setOutlineColor(sf::Color(245, 245, 245));
+    window_.draw(humanVsAiButton);
+
+    sf::Text humanVsHumanText(font_, "Human vs Human", 24);
+    humanVsHumanText.setFillColor(sf::Color(28, 32, 36));
+    humanVsHumanText.setPosition({440.f, 342.f});
+    window_.draw(humanVsHumanText);
+
+    sf::Text humanVsAiText(font_, "Human vs AI", 24);
+    humanVsAiText.setFillColor(sf::Color(28, 32, 36));
+    humanVsAiText.setPosition({475.f, 442.f});
+    window_.draw(humanVsAiText);
+}
+
+// Particles effects
+
+void UIBoard::initParticles()
+{
+    particles_.clear();
+
+    for (int i = 0; i < 60; ++i)
+    {
+        Particle p;
+
+        p.position = sf::Vector2f(
+            static_cast<float>(std::rand() % 1100),
+            static_cast<float>(std::rand() % 860));
+
+        p.velocity = sf::Vector2f(
+            -0.2f + static_cast<float>(std::rand() % 40) / 100.f,
+            0.1f + static_cast<float>(std::rand() % 30) / 100.f);
+
+        p.radius = 1.f + static_cast<float>(std::rand() % 3);
+
+        p.color = sf::Color(222, 184, 135, 120);
+
+        particles_.push_back(p);
+    }
+}
+
+void UIBoard::updateParticles()
+{
+    for (auto &p : particles_)
+    {
+        p.position += p.velocity;
+
+        if (p.position.x < 0.f)
+            p.position.x = 1100.f;
+        if (p.position.x > 1100.f)
+            p.position.x = 0.f;
+        if (p.position.y < 0.f)
+            p.position.y = 860.f;
+        if (p.position.y > 860.f)
+            p.position.y = 0.f;
+    }
+}
+
+void UIBoard::drawParticles()
+{
+    for (const auto &p : particles_)
+    {
+        sf::CircleShape dot(p.radius);
+        dot.setPosition(p.position);
+        dot.setFillColor(p.color);
+        window_.draw(dot);
+    }
+}
+
+UIBoard::~UIBoard()
+{
+    if (window_.isOpen())
+        window_.close();
+}

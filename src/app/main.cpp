@@ -1,7 +1,9 @@
-#include <gomoku/ui/UIBoard.hpp>
+#include <gomoku/Game.hpp>
 
-int main(){
-    UIBoard uiBoard;
-    
-   
+int main()
+{
+    Game game;
+    game.start();
+
+    return 0;
 }

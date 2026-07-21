@@ -12,7 +12,23 @@ namespace
 UIBoard::UIBoard()
 {
     board_ = Board();
-    init();
+   
+}
+
+void UIBoard::resetGameState()
+{
+    board_.reset();
+    currentTurn_ = Stone::BLACK;
+    mousePressed_ = false;
+    gameOver_ = false;
+    blackCaptures_ = 0;
+    whiteCaptures_ = 0;
+    lastAiTimeMs_ = 0.f;
+}
+
+std::string UIBoard::getWinnerName() const
+{
+    return currentTurn_ == Stone::BLACK ? "White" : "Black";
 }
 
 void UIBoard::init()

@@ -1,4 +1,4 @@
-NAME = gomoku
+NAME = gomo
 TEST_NAME = run_tests
 
 CXX = c++

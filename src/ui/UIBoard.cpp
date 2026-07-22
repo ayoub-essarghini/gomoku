@@ -114,19 +114,20 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
         return true;
     }
 
-    // Cycle Game Rule Variant Area (y: 180 ~ 205)
     if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 180 && mousePos.y <= 205)
     {
         uint8_t nextRule = (static_cast<uint8_t>(ruleVariant_) + 1) % 5;
         ruleVariant_ = static_cast<RuleVariant>(nextRule);
-        // resetGameState();
+        resetGameState();
         return true;
     }
 
     // Swap2 Decision Phase Button Interactions
     if (ruleVariant_ == RuleVariant::SWAP2 && !openingManager_.isOpeningFinished())
     {
-        if (openingManager_.getSwap2Phase() == Swap2Phase::PLAYER2_CHOICE)
+        Swap2Phase phase = openingManager_.getSwap2Phase();
+
+        if (phase == Swap2Phase::PLAYER2_CHOICE)
         {
             if (mousePos.y >= 600 && mousePos.y <= 625)
             {
@@ -141,7 +142,46 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
             else if (mousePos.y >= 660 && mousePos.y <= 685)
             {
                 openingManager_.processSwap2Choice(3, currentTurn_);
-                statusMessage_ = "P2: Added 2 Stones";
+                statusMessage_ = "P2: Placing 2 more stones";
+            }
+            return true;
+        }
+
+        
+        if (phase == Swap2Phase::PLAYER1_CHOICE)
+        {
+            if (mousePos.y >= 600 && mousePos.y <= 625)
+            {
+                openingManager_.processSwap2Choice(1, currentTurn_);
+                statusMessage_ = "P1: Playing Black";
+            }
+            else if (mousePos.y >= 630 && mousePos.y <= 655)
+            {
+                openingManager_.processSwap2Choice(2, currentTurn_);
+                statusMessage_ = "P1: Playing White";
+            }
+            if (openingManager_.isOpeningFinished())
+            {
+                statusMessage_ = "Game in progress";
+            }
+            return true;
+        }
+    }
+
+    
+    if (ruleVariant_ == RuleVariant::SWAP && !openingManager_.isOpeningFinished())
+    {
+        if (openingManager_.getSwap2Phase() == Swap2Phase::PLAYER2_CHOICE)
+        {
+            if (mousePos.y >= 600 && mousePos.y <= 625)
+            {
+                openingManager_.processSwap2Choice(1, currentTurn_);
+                statusMessage_ = "Game in progress";
+            }
+            else if (mousePos.y >= 630 && mousePos.y <= 655)
+            {
+                openingManager_.processSwap2Choice(2, currentTurn_);
+                statusMessage_ = "Game in progress";
             }
             return true;
         }
@@ -159,6 +199,20 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
     if (mousePos.x >= 800)
     {
         return handlePanelClick(mousePos);
+    }
+
+    const bool inOpening = (ruleVariant_ == RuleVariant::SWAP2 || ruleVariant_ == RuleVariant::SWAP)
+                            && !openingManager_.isOpeningFinished();
+
+   
+    if (inOpening)
+    {
+        Swap2Phase phase = openingManager_.getSwap2Phase();
+        if (phase == Swap2Phase::PLAYER2_CHOICE || phase == Swap2Phase::PLAYER1_CHOICE)
+        {
+            statusMessage_ = "Waiting for opening decision (see panel)";
+            return false;
+        }
     }
 
     constexpr int maxIndex = 18;
@@ -193,6 +247,25 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
 
     if (!board_.placeStone(boardPos, currentTurn_))
         return false;
+
+    if (inOpening)
+    {
+      
+        openingManager_.notifyStonePlaced();
+
+        Swap2Phase newPhase = openingManager_.getSwap2Phase();
+        if (newPhase == Swap2Phase::PLAYER2_CHOICE)
+        {
+            statusMessage_ = "Player 2: choose an option";
+            return true;
+        }
+        if (newPhase == Swap2Phase::PLAYER1_CHOICE)
+        {
+            statusMessage_ = "Player 1: choose a color";
+            return true;
+        }
+        
+    }
 
     Bitboard currentBB = RuleChecker::extractBitboard(board_, currentTurn_);
 
@@ -329,15 +402,28 @@ void UIBoard::drawPanel()
     drawText("[ Suggest Move ]", 830.f, 500.f, 20);
     drawText("[ Mode ]", 830.f, 540.f, 20);
 
-    // Render Swap2 options inside side panel when active
-    if (ruleVariant_ == RuleVariant::SWAP2 && !openingManager_.isOpeningFinished())
+    // Render Swap/Swap2 options inside side panel when active
+    if ((ruleVariant_ == RuleVariant::SWAP2 || ruleVariant_ == RuleVariant::SWAP)
+        && !openingManager_.isOpeningFinished())
     {
-        if (openingManager_.getSwap2Phase() == Swap2Phase::PLAYER2_CHOICE)
+        Swap2Phase phase = openingManager_.getSwap2Phase();
+
+        if (phase == Swap2Phase::PLAYER2_CHOICE)
         {
-            drawText("-- Swap2 Options --", 830.f, 580.f, 16);
+            drawText("-- Player 2: Choose --", 830.f, 580.f, 16);
             drawText("> Stay White", 830.f, 605.f, 16);
-            drawText("> Swap Colors", 830.f, 635.f, 16);
-            drawText("> Add 2 Stones", 830.f, 665.f, 16);
+            drawText("> Swap to Black", 830.f, 635.f, 16);
+            if (ruleVariant_ == RuleVariant::SWAP2)
+            {
+                drawText("> Place 2 More Stones", 830.f, 665.f, 16);
+            }
+        }
+        else if (phase == Swap2Phase::PLAYER1_CHOICE)
+        {
+            // FIX: previously never drawn, matching the missing click handler.
+            drawText("-- Player 1: Choose --", 830.f, 580.f, 16);
+            drawText("> Play Black", 830.f, 605.f, 16);
+            drawText("> Play White", 830.f, 635.f, 16);
         }
     }
 }

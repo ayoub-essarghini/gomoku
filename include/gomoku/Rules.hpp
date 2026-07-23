@@ -27,6 +27,7 @@ class RuleChecker {
         static bool hasOverline(const Bitboard& bitBoard);
         static bool isValidProMove(int moveCount, const Position& pos);
         static bool isRenjuFoul(const Board& board, const Position& pos);
+        static int applyCaptures(Board& board, const Position& pos, Stone color);
 };
 class OpeningManager {
     public:

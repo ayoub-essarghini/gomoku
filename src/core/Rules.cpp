@@ -268,3 +268,45 @@ bool OpeningManager::processSwap2Choice(int choiceOption, Stone& currentTurn) {
 
     return false;
 }
+
+namespace {
+
+    constexpr int CAPTURE_DIRS[8][2] = {
+        {-1, -1}, {-1, 0}, {-1, 1},
+        { 0, -1},          { 0, 1},
+        { 1, -1}, { 1, 0}, { 1, 1},
+    };
+    
+    bool inBounds(const Position& p) {
+        return p.x >= 0 && p.y >= 0 && p.x < Board::HEIGHT && p.y < Board::WIDTH;
+    }
+ 
+} // namespace
+ 
+int RuleChecker::applyCaptures(Board& board, const Position& pos, Stone color) {
+    const Stone opponent = (color == Stone::BLACK) ? Stone::WHITE : Stone::BLACK;
+    int capturedPairs = 0;
+ 
+    for (const auto& d : CAPTURE_DIRS) {
+        const int dx = d[0];
+        const int dy = d[1];
+ 
+        Position p1{pos.x + dx,     pos.y + dy};       // nearest neighbor
+        Position p2{pos.x + 2 * dx, pos.y + 2 * dy};    // second neighbor
+        Position p3{pos.x + 3 * dx, pos.y + 3 * dy};    // far flank
+ 
+        if (!inBounds(p3)) continue;
+ 
+        if (board.hasStone(p1, opponent) &&
+            board.hasStone(p2, opponent) &&
+            board.hasStone(p3, color))
+        {
+            
+            board.removeStone(p1);
+            board.removeStone(p2);
+            ++capturedPairs;
+        }
+    }
+ 
+    return capturedPairs;
+} 

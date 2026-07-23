@@ -244,8 +244,28 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
     if (!board_.placeStone(boardPos, currentTurn_))
         return false;
 
+   
+    int captured = RuleChecker::applyCaptures(board_, boardPos, currentTurn_);
+    if (captured > 0)
+    {
+        if (currentTurn_ == Stone::BLACK)
+            blackCaptures_ += captured;
+        else
+            whiteCaptures_ += captured;
+
+        if ((currentTurn_ == Stone::BLACK && blackCaptures_ >= 5) ||
+            (currentTurn_ == Stone::WHITE && whiteCaptures_ >= 5))
+        {
+            gameOver_ = true;
+            winnerName_ = (currentTurn_ == Stone::BLACK) ? "Black" : "White";
+            statusMessage_ = winnerName_ + " Wins by Captures!";
+            return true;
+        }
+    }
+
     if (inOpening)
     {
+        
         openingManager_.notifyStonePlaced();
 
         Swap2Phase newPhase = openingManager_.getSwap2Phase();
@@ -261,11 +281,11 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
         }
     }
 
-    Bitboard currentbitboard = RuleChecker::extractBitboard(board_, currentTurn_);
+    Bitboard currentBB = RuleChecker::extractBitboard(board_, currentTurn_);
 
-    if (RuleChecker::hasFiveInARow(currentbitboard))
+    if (RuleChecker::hasFiveInARow(currentBB))
     {
-        if (ruleVariant_ == RuleVariant::RENJU && currentTurn_ == Stone::BLACK && RuleChecker::hasOverline(currentbitboard))
+        if (ruleVariant_ == RuleVariant::RENJU && currentTurn_ == Stone::BLACK && RuleChecker::hasOverline(currentBB))
         {
             gameOver_ = true;
             winnerName_ = "White";

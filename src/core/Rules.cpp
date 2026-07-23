@@ -4,68 +4,68 @@
 #include <iostream>
 
 Bitboard RuleChecker::extractBitboard(const Board& board, Stone color) {
-    Bitboard bb;
+    Bitboard bitboard;
     for (int r = 0; r < Board::HEIGHT; ++r) {
         for (int c = 0; c < Board::WIDTH; ++c) {
             if (board.hasStone({r, c}, color)) {
-                bb.rows[r] |= (1U << c);
+                bitboard.rows[r] |= (1U << c);
             }
         }
     }
-    return bb;
+    return bitboard;
 }
 
-bool RuleChecker::hasFiveInARow(const Bitboard& bb) {
+bool RuleChecker::hasFiveInARow(const Bitboard& bitboard) {
     for (int r = 0; r < 19; ++r) {
-        uint32_t row = bb.rows[r];
+        uint32_t row = bitboard.rows[r];
         if ((row & (row >> 1) & (row >> 2) & (row >> 3) & (row >> 4)) != 0) {
             return true;
         }
     }
 
     for (int r = 0; r <= 14; ++r) {
-        uint32_t v = bb.rows[r] & bb.rows[r + 1] & bb.rows[r + 2] & bb.rows[r + 3] & bb.rows[r + 4];
+        uint32_t v = bitboard.rows[r] & bitboard.rows[r + 1] & bitboard.rows[r + 2] & bitboard.rows[r + 3] & bitboard.rows[r + 4];
         if (v != 0) return true;
     }
 
     for (int r = 0; r <= 14; ++r) {
-        uint32_t d1 = bb.rows[r] & (bb.rows[r + 1] >> 1) & (bb.rows[r + 2] >> 2)
-                    & (bb.rows[r + 3] >> 3) & (bb.rows[r + 4] >> 4);
+        uint32_t d1 = bitboard.rows[r] & (bitboard.rows[r + 1] >> 1) & (bitboard.rows[r + 2] >> 2)
+                    & (bitboard.rows[r + 3] >> 3) & (bitboard.rows[r + 4] >> 4);
         if (d1 != 0) return true;
     }
 
     for (int r = 0; r <= 14; ++r) {
-        uint32_t d2 = bb.rows[r] & (bb.rows[r + 1] << 1) & (bb.rows[r + 2] << 2)
-                    & (bb.rows[r + 3] << 3) & (bb.rows[r + 4] << 4);
+        uint32_t d2 = bitboard.rows[r] & (bitboard.rows[r + 1] << 1) & (bitboard.rows[r + 2] << 2)
+                    & (bitboard.rows[r + 3] << 3) & (bitboard.rows[r + 4] << 4);
         if (d2 != 0) return true;
     }
 
     return false;
 }
 
-bool RuleChecker::hasOverline(const Bitboard& bb) {
+bool RuleChecker::hasOverline(const Bitboard& bitboard) {
     for (int r = 0; r < 19; ++r) {
-        uint32_t row = bb.rows[r];
+        uint32_t row = bitboard.rows[r];
         if ((row & (row >> 1) & (row >> 2) & (row >> 3) & (row >> 4) & (row >> 5)) != 0) {
             return true;
         }
     }
 
     for (int r = 0; r <= 13; ++r) {
-        uint32_t v = bb.rows[r] & bb.rows[r + 1] & bb.rows[r + 2]
-                   & bb.rows[r + 3] & bb.rows[r + 4] & bb.rows[r + 5];
+        uint32_t v = bitboard.rows[r] & bitboard.rows[r + 1] & bitboard.rows[r + 2]
+                   & bitboard.rows[r + 3] & bitboard.rows[r + 4] & bitboard.rows[r + 5];
         if (v != 0) return true;
     }
 
     for (int r = 0; r <= 13; ++r) {
-        uint32_t d1 = bb.rows[r] & (bb.rows[r + 1] >> 1) & (bb.rows[r + 2] >> 2)
-                    & (bb.rows[r + 3] >> 3) & (bb.rows[r + 4] >> 4) & (bb.rows[r + 5] >> 5);
+        uint32_t d1 = bitboard.rows[r] & (bitboard.rows[r + 1] >> 1) & (bitboard.rows[r + 2] >> 2)
+                    & (bitboard.rows[r + 3] >> 3) & (bitboard.rows[r + 4] >> 4) & (bitboard.rows[r + 5] >> 5);
         if (d1 != 0) return true;
     }
 
     for (int r = 0; r <= 13; ++r) {
-        uint32_t d2 = bb.rows[r] & (bb.rows[r + 1] << 1) & (bb.rows[r + 2] << 2)
-                    & (bb.rows[r + 3] << 3) & (bb.rows[r + 4] << 4) & (bb.rows[r + 5] << 5);
+        uint32_t d2 = bitboard.rows[r] & (bitboard.rows[r + 1] << 1) & (bitboard.rows[r + 2] << 2)
+                    & (bitboard.rows[r + 3] << 3) & (bitboard.rows[r + 4] << 4) & (bitboard.rows[r + 5] << 5);
         if (d2 != 0) return true;
     }
 

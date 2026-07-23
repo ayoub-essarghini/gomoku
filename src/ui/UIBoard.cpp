@@ -261,11 +261,11 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
         }
     }
 
-    Bitboard currentBB = RuleChecker::extractBitboard(board_, currentTurn_);
+    Bitboard currentbitboard = RuleChecker::extractBitboard(board_, currentTurn_);
 
-    if (RuleChecker::hasFiveInARow(currentBB))
+    if (RuleChecker::hasFiveInARow(currentbitboard))
     {
-        if (ruleVariant_ == RuleVariant::RENJU && currentTurn_ == Stone::BLACK && RuleChecker::hasOverline(currentBB))
+        if (ruleVariant_ == RuleVariant::RENJU && currentTurn_ == Stone::BLACK && RuleChecker::hasOverline(currentbitboard))
         {
             gameOver_ = true;
             winnerName_ = "White";

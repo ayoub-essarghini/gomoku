@@ -111,7 +111,7 @@ int main() {
     //   row:    6  7  8  9
     //   before: B  .  ?  B
     //   after playing (8,11): B . B B  -> this is a BROKEN three
-    //   (".B.BB." pattern once padded with the surrounding empties),
+    //   (".B.bitboard." pattern once padded with the surrounding empties),
     //   which must still register as a live three via simulate-and-check.
     //
     // Horizontal axis (row 8) additionally gets a clean flanking pair so
@@ -131,7 +131,7 @@ int main() {
             {6, 11},
             {9, 11},
             // Horizontal plain three through (8,11): flanks directly
-            // adjacent to the move so it collapses into ".BBB." (live).
+            // adjacent to the move so it collapses into ".bitboardB." (live).
             {8, 10},
             {8, 12},
         });
@@ -148,7 +148,7 @@ int main() {
     //
     // Move under test: (8, 12)
     //   row 8, cols 9..13: W  B  B  [?]  .
-    //   after playing (8,12): W B B B .  == "WBBB."
+    //   after playing (8,12): W B B B .  == "WbitboardB."
     // This is a real threat (hasFourThreat should catch it if it were 4
     // stones — here it's still only a three), but crucially it can be
     // fully shut down by White playing the single remaining empty cell,
@@ -168,7 +168,7 @@ int main() {
 
     // -------------------------------------------------------------------
     // Test 5: Double-four must be a foul.
-    // Horizontal: .BBBB. type four via existing B B _ B with move filling.
+    // Horizontal: .bitboardbitboard. type four via existing B B _ B with move filling.
     // Vertical:   same idea on the other axis.
     // -------------------------------------------------------------------
     {

@@ -1,6 +1,7 @@
 #include <gomoku/Rules.hpp>
 #include <cmath>
 #include <string>
+#include <iostream>
 
 Bitboard RuleChecker::extractBitboard(const Board& board, Stone color) {
     Bitboard bb;
@@ -71,6 +72,7 @@ bool RuleChecker::hasOverline(const Bitboard& bb) {
     return false;
 }
 
+
 bool RuleChecker::isValidProMove(int moveCount, const Position& pos) {
    
     const int centerX = Board::WIDTH / 2;
@@ -88,23 +90,27 @@ bool RuleChecker::isValidProMove(int moveCount, const Position& pos) {
 
 namespace {
 
-    enum class Cell : char { EMPTY = '.', BLACK = 'X', WHITE = 'O', WALL = '#' };
+    constexpr char CELL_BLACK = 'B';
+    constexpr char CELL_WHITE = 'W';
+    constexpr char CELL_EMPTY = '.';
+    constexpr char CELL_WALL  = '#';
 
-    Cell getCell(const Board& board, int x, int y) {
+    char getCellChar(const Board& board, int x, int y) {
+    
         if (x < 0 || y < 0 || x >= Board::HEIGHT || y >= Board::WIDTH) {
-            return Cell::WALL;
+            return CELL_WALL;
         }
         Position p{x, y};
-        if (board.hasStone(p, Stone::BLACK)) return Cell::BLACK;
-        if (board.hasStone(p, Stone::WHITE)) return Cell::WHITE;
-        return Cell::EMPTY;
+        if (board.hasStone(p, Stone::BLACK)) return CELL_BLACK;
+        if (board.hasStone(p, Stone::WHITE)) return CELL_WHITE;
+        return CELL_EMPTY;
     }
 
     std::string extractLine(const Board& board, int cx, int cy, int dx, int dy, int radius) {
         std::string line;
         line.reserve(2 * radius + 1);
         for (int k = -radius; k <= radius; ++k) {
-            line.push_back(static_cast<char>(getCell(board, cx + k * dx, cy + k * dy)));
+            line.push_back(getCellChar(board, cx + k * dx, cy + k * dy));
         }
         return line;
     }
@@ -112,29 +118,35 @@ namespace {
 
     bool hasFourThreat(const std::string& line) {
         for (size_t i = 0; i + 5 <= line.size(); ++i) {
-            int blackCount = 0, emptyCount = 0;
+            int blackCount = 0;
+            int emptyCount = 0;
             for (size_t j = i; j < i + 5; ++j) {
-                if (line[j] == static_cast<char>(Cell::BLACK)) ++blackCount;
-                else if (line[j] == static_cast<char>(Cell::EMPTY)) ++emptyCount;
+                if (line[j] == CELL_BLACK) ++blackCount;
+                else if (line[j] == CELL_EMPTY) ++emptyCount;
             }
-            if (blackCount == 4 && emptyCount == 1) return true;
+            if (blackCount == 4 && emptyCount == 1) {
+                return true;
+            }
         }
         return false;
     }
 
-
     bool hasLiveFour(const std::string& line) {
-        const std::string pattern = ".XXXX.";
-        return line.find(pattern) != std::string::npos;
+        const std::string livePattern = { CELL_EMPTY, CELL_BLACK, CELL_BLACK, CELL_BLACK, CELL_BLACK, CELL_EMPTY };
+        return line.find(livePattern) != std::string::npos;
     }
 
 
     bool isLiveThree(const std::string& line) {
         for (size_t i = 0; i < line.size(); ++i) {
-            if (line[i] != static_cast<char>(Cell::EMPTY)) continue;
+            if (line[i] != CELL_EMPTY) continue;
+
             std::string trial = line;
-            trial[i] = static_cast<char>(Cell::BLACK);
-            if (hasLiveFour(trial)) return true;
+            trial[i] = CELL_BLACK;
+
+            if (hasLiveFour(trial)) {
+                return true;
+            }
         }
         return false;
     }
@@ -147,12 +159,10 @@ bool RuleChecker::isRenjuFoul(const Board& board, const Position& pos) {
 
     Bitboard blackBitboard = extractBitboard(tempBoard, Stone::BLACK);
 
-    // Overline is always a foul.
     if (hasOverline(blackBitboard)) {
         return true;
     }
 
-    // Completing an exact five always wins outright; never a foul.
     if (hasFiveInARow(blackBitboard)) {
         return false;
     }
@@ -165,7 +175,7 @@ bool RuleChecker::isRenjuFoul(const Board& board, const Position& pos) {
 
     for (const auto& d : dirs) {
         std::string line = extractLine(tempBoard, pos.x, pos.y, d[0], d[1], radius);
-
+        std::cout << "line :" << line << std::endl;
         if (hasFourThreat(line)) {
             ++fourCount;
         }
@@ -173,7 +183,8 @@ bool RuleChecker::isRenjuFoul(const Board& board, const Position& pos) {
             ++threeCount;
         }
     }
-
+    std::cout << "count_four : " << fourCount << std::endl;
+    std::cout << "count_three : " << threeCount << std::endl;
     if (fourCount >= 2) {
         return true; // double-four
     }

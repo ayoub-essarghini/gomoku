@@ -146,8 +146,6 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
             }
             return true;
         }
-
-        
         if (phase == Swap2Phase::PLAYER1_CHOICE)
         {
             if (mousePos.y >= 600 && mousePos.y <= 625)
@@ -168,7 +166,6 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
         }
     }
 
-    
     if (ruleVariant_ == RuleVariant::SWAP && !openingManager_.isOpeningFinished())
     {
         if (openingManager_.getSwap2Phase() == Swap2Phase::PLAYER2_CHOICE)
@@ -233,14 +230,13 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
         return false;
     }
 
-    // 2. Validate Renju Fouls (Black Only)
     if (ruleVariant_ == RuleVariant::RENJU && currentTurn_ == Stone::BLACK)
     {
         if (RuleChecker::isRenjuFoul(board_, boardPos))
         {
-            gameOver_ = true;
-            winnerName_ = "White";
-            statusMessage_ = "Foul! Black loses.";
+            hasForbiddenMarker_ = true;
+            forbiddenPos_ = boardPos;
+            statusMessage_ = "Forbidden Move";
             return false;
         }
     }
@@ -250,7 +246,6 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
 
     if (inOpening)
     {
-      
         openingManager_.notifyStonePlaced();
 
         Swap2Phase newPhase = openingManager_.getSwap2Phase();
@@ -264,7 +259,6 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
             statusMessage_ = "Player 1: choose a color";
             return true;
         }
-        
     }
 
     Bitboard currentBB = RuleChecker::extractBitboard(board_, currentTurn_);

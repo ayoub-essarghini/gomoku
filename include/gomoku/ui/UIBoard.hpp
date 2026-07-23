@@ -54,7 +54,8 @@ private:
     int blackCaptures_{0};
     int whiteCaptures_{0};
     float lastAiTimeMs_{0.f};
-
+    bool hasForbiddenMarker_ = false;
+    Position forbiddenPos_{-1, -1};
    
     std::vector<Particle> particles_;
 

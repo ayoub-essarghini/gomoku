@@ -4,7 +4,7 @@ TEST_NAME = run_tests
 CXX = c++
 CXXFLAGS = -Wall -Wextra -Werror -std=c++20 -O3 -DSFML_STATIC
 
-LOCAL_PREFIX = /home/hlakhal-/local
+LOCAL_PREFIX = $(HOME)/local
 
 SFML_CFLAGS := -I$(LOCAL_PREFIX)/include $(shell pkg-config --cflags freetype2 2>/dev/null)
 SFML_LIBS   := -L$(LOCAL_PREFIX)/lib \

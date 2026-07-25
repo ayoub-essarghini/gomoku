@@ -1,359 +1,219 @@
-// tests/TBoard.cpp - UPDATED CLEAN VERSION
-#include <iostream>
-#include <cassert>
+// test_renju_foul.cpp
+//
+// Standalone harness for RuleChecker::isRenjuFoul. No test framework
+// dependency (gtest/catch2 etc.) — just asserts + printed PASS/FAIL so it
+// can be dropped into any build without wiring up a new test target.
+//
+// Build (adjust include/lib paths to your project):
+//   g++ -std=c++17 test_renju_foul.cpp src/Rules.cpp src/Board.cpp -Iinclude -o test_renju_foul
+//   ./test_renju_foul
+//
+#include <gomoku/Rules.hpp>
 #include <gomoku/Board.hpp>
-#include <gomoku/Position.hpp>
-#include <gomoku/Stone.hpp>
+#include <iostream>
+#include <string>
 
-#define ASSERT_TRUE(x)  if (!(x)) { std::cout << "FAIL: " #x << std::endl; return false; }
-#define ASSERT_FALSE(x) if ((x))  { std::cout << "FAIL: " #x << std::endl; return false; }
-#define ASSERT_EQ(a,b)  if (!((a) == (b))) { std::cout << "FAIL: " #a " == " #b << std::endl; return false; }
-#define ASSERT_NE(a,b)  if ((a) == (b)) { std::cout << "FAIL: " #a " != " #b << std::endl; return false; }
+namespace {
 
-// ============ BASIC TESTS ============
+int g_failures = 0;
+int g_total = 0;
 
-bool test_Board_initial_empty()
-{
-    Board board;
-
-    for (int r = 0; r < Board::HEIGHT; r++)
-    {
-        for (int c = 0; c < Board::WIDTH; c++)
-        {
-            Position pos{r, c};
-            ASSERT_TRUE(board.isEmpty(pos));
-            ASSERT_FALSE(board.hasStone(pos, Stone::BLACK));
-            ASSERT_FALSE(board.hasStone(pos, Stone::WHITE));
-        }
-    }
-
-    std::cout << "PASS: Board initial empty\n";
-    return true;
-}
-
-bool test_place_black_stone()
-{
-    Board board;
-    Position p{5, 5};
-
-    board.placeStone(p, Stone::BLACK);
-
-    ASSERT_TRUE(board.hasStone(p, Stone::BLACK));
-    ASSERT_FALSE(board.hasStone(p, Stone::WHITE));
-    ASSERT_FALSE(board.isEmpty(p));
-
-    std::cout << "PASS: place black stone\n";
-    return true;
-}
-
-bool test_place_white_stone()
-{
-    Board board;
-    Position p{7, 8};
-
-    board.placeStone(p, Stone::WHITE);
-
-    ASSERT_TRUE(board.hasStone(p, Stone::WHITE));
-    ASSERT_FALSE(board.hasStone(p, Stone::BLACK));
-    ASSERT_FALSE(board.isEmpty(p));
-
-    std::cout << "PASS: place white stone\n";
-    return true;
-}
-
-bool test_no_overwrite_black()
-{
-    Board board;
-    Position p{5, 5};
-
-    board.placeStone(p, Stone::BLACK);
-    board.placeStone(p, Stone::BLACK);
-
-    ASSERT_TRUE(board.hasStone(p, Stone::BLACK));
-    ASSERT_EQ(board.countStones(Stone::BLACK), 1);
-
-    std::cout << "PASS: no double black stones\n";
-    return true;
-}
-
-bool test_remove_stone()
-{
-    Board board;
-    Position p{5, 5};
-
-    board.placeStone(p, Stone::BLACK);
-    ASSERT_FALSE(board.isEmpty(p));
-
-    board.removeStone(p);
-    ASSERT_TRUE(board.isEmpty(p));
-
-    std::cout << "PASS: remove stone\n";
-    return true;
-}
-
-bool test_reset()
-{
-    Board board;
-
-    board.placeStone({5, 5}, Stone::BLACK);
-    board.placeStone({7, 8}, Stone::WHITE);
-
-    board.reset();
-
-    ASSERT_TRUE(board.isEmpty({5, 5}));
-    ASSERT_TRUE(board.isEmpty({7, 8}));
-    ASSERT_EQ(board.countStones(Stone::BLACK), 0);
-    ASSERT_EQ(board.countStones(Stone::WHITE), 0);
-
-    std::cout << "PASS: reset\n";
-    return true;
-}
-
-// ============ COUNTING TESTS ============
-
-bool test_count_black_stones()
-{
-    Board board;
-
-    ASSERT_EQ(board.countStones(Stone::BLACK), 0);
-
-    board.placeStone({0, 0}, Stone::BLACK);
-    ASSERT_EQ(board.countStones(Stone::BLACK), 1);
-
-    board.placeStone({5, 5}, Stone::BLACK);
-    ASSERT_EQ(board.countStones(Stone::BLACK), 2);
-
-    board.placeStone({18, 18}, Stone::BLACK);
-    ASSERT_EQ(board.countStones(Stone::BLACK), 3);
-
-    std::cout << "PASS: count black stones\n";
-    return true;
-}
-
-bool test_count_white_stones()
-{
-    Board board;
-
-    ASSERT_EQ(board.countStones(Stone::WHITE), 0);
-
-    board.placeStone({3, 3}, Stone::WHITE);
-    ASSERT_EQ(board.countStones(Stone::WHITE), 1);
-
-    board.placeStone({10, 10}, Stone::WHITE);
-    ASSERT_EQ(board.countStones(Stone::WHITE), 2);
-
-    std::cout << "PASS: count white stones\n";
-    return true;
-}
-
-bool test_count_mixed()
-{
-    Board board;
-
-    board.placeStone({1, 1}, Stone::BLACK);
-    board.placeStone({2, 2}, Stone::BLACK);
-    board.placeStone({3, 3}, Stone::WHITE);
-    board.placeStone({4, 4}, Stone::WHITE);
-    board.placeStone({5, 5}, Stone::WHITE);
-
-    ASSERT_EQ(board.countStones(Stone::BLACK), 2);
-    ASSERT_EQ(board.countStones(Stone::WHITE), 3);
-
-    std::cout << "PASS: count mixed stones\n";
-    return true;
-}
-
-// ============ GET STONES TESTS ============
-
-bool test_get_black_stones()
-{
-    Board board;
-
-    board.placeStone({0, 0}, Stone::BLACK);
-    board.placeStone({5, 5}, Stone::BLACK);
-    board.placeStone({18, 18}, Stone::BLACK);
-
-    auto blacks = board.getStones(Stone::BLACK);
-
-    ASSERT_EQ(blacks.size(), 3);
-
-    std::cout << "PASS: get black stones\n";
-    return true;
-}
-
-bool test_get_white_stones()
-{
-    Board board;
-
-    board.placeStone({1, 1}, Stone::WHITE);
-    board.placeStone({10, 10}, Stone::WHITE);
-
-    auto whites = board.getStones(Stone::WHITE);
-
-    ASSERT_EQ(whites.size(), 2);
-
-    std::cout << "PASS: get white stones\n";
-    return true;
-}
-
-// ============ BOUNDARY TESTS ============
-
-bool test_corners()
-{
-    Board board;
-
-    board.placeStone({0, 0}, Stone::BLACK);
-    ASSERT_TRUE(board.hasStone({0, 0}, Stone::BLACK));
-
-    board.placeStone({0, 18}, Stone::BLACK);
-    ASSERT_TRUE(board.hasStone({0, 18}, Stone::BLACK));
-
-    board.placeStone({18, 0}, Stone::WHITE);
-    ASSERT_TRUE(board.hasStone({18, 0}, Stone::WHITE));
-
-    board.placeStone({18, 18}, Stone::WHITE);
-    ASSERT_TRUE(board.hasStone({18, 18}, Stone::WHITE));
-
-    std::cout << "PASS: corners\n";
-    return true;
-}
-
-bool test_edge_positions()
-{
-    Board board;
-
-    board.placeStone({0, 5}, Stone::BLACK);
-    board.placeStone({5, 0}, Stone::BLACK);
-    board.placeStone({18, 5}, Stone::BLACK);
-    board.placeStone({5, 18}, Stone::BLACK);
-
-    ASSERT_EQ(board.countStones(Stone::BLACK), 4);
-
-    std::cout << "PASS: edge positions\n";
-    return true;
-}
-
-// ============ STRESS TESTS ============
-
-bool test_fill_partial_board()
-{
-    Board board;
-
-    board.placeStone({0, 0}, Stone::BLACK);
-    board.placeStone({1, 1}, Stone::BLACK);
-    board.placeStone({2, 2}, Stone::BLACK);
-    board.placeStone({3, 3}, Stone::BLACK);
-    board.placeStone({4, 4}, Stone::BLACK);
-    
-    board.placeStone({5, 5}, Stone::WHITE);
-    board.placeStone({6, 6}, Stone::WHITE);
-    board.placeStone({7, 7}, Stone::WHITE);
-    board.placeStone({8, 8}, Stone::WHITE);
-    board.placeStone({9, 9}, Stone::WHITE);
-
-    ASSERT_EQ(board.countStones(Stone::BLACK), 5);
-    ASSERT_EQ(board.countStones(Stone::WHITE), 5);
-
-    std::cout << "PASS: fill partial board\n";
-    return true;
-}
-
-bool test_reset_after_fill()
-{
-    Board board;
-
-    for (int i = 0; i < 20; i++)
-    {
-        board.placeStone({i / 19, i % 19}, Stone::BLACK);
-    }
-
-    ASSERT_NE(board.countStones(Stone::BLACK), 0);
-
-    board.reset();
-
-    ASSERT_EQ(board.countStones(Stone::BLACK), 0);
-    ASSERT_EQ(board.countStones(Stone::WHITE), 0);
-
-    std::cout << "PASS: reset after fill\n";
-    return true;
-}
-
-// ============ REMOVE AND REPLACE TESTS ============
-
-bool test_remove_and_replace()
-{
-    Board board;
-    Position p{5, 5};
-
-    board.placeStone(p, Stone::BLACK);
-    ASSERT_TRUE(board.hasStone(p, Stone::BLACK));
-
-    board.removeStone(p);
-    ASSERT_TRUE(board.isEmpty(p));
-
-    board.placeStone(p, Stone::WHITE);
-    ASSERT_TRUE(board.hasStone(p, Stone::WHITE));
-
-    std::cout << "PASS: remove and replace\n";
-    return true;
-}
-
-bool test_multiple_operations()
-{
-    Board board;
-
-    board.placeStone({5, 5}, Stone::BLACK);
-    board.placeStone({5, 6}, Stone::BLACK);
-    board.placeStone({6, 5}, Stone::WHITE);
-
-    ASSERT_EQ(board.countStones(Stone::BLACK), 2);
-    ASSERT_EQ(board.countStones(Stone::WHITE), 1);
-
-    board.removeStone({5, 5});
-
-    ASSERT_EQ(board.countStones(Stone::BLACK), 1);
-    ASSERT_TRUE(board.isEmpty({5, 5}));
-    ASSERT_TRUE(board.hasStone({5, 6}, Stone::BLACK));
-
-    std::cout << "PASS: multiple operations\n";
-    return true;
-}
-
-// ============ MAIN TEST RUNNER ============
-
-int main()
-{
-    std::cout << "=== Board Test Suite ===\n\n";
-
-    int passed = 0;
-    int total = 0;
-
-    total++; if (test_Board_initial_empty()) passed++;
-    total++; if (test_place_black_stone()) passed++;
-    total++; if (test_place_white_stone()) passed++;
-    total++; if (test_no_overwrite_black()) passed++;
-    total++; if (test_remove_stone()) passed++;
-    total++; if (test_reset()) passed++;
-    total++; if (test_count_black_stones()) passed++;
-    total++; if (test_count_white_stones()) passed++;
-    total++; if (test_count_mixed()) passed++;
-    total++; if (test_get_black_stones()) passed++;
-    total++; if (test_get_white_stones()) passed++;
-    total++; if (test_corners()) passed++;
-    total++; if (test_edge_positions()) passed++;
-    total++; if (test_fill_partial_board()) passed++;
-    total++; if (test_reset_after_fill()) passed++;
-    total++; if (test_remove_and_replace()) passed++;
-    total++; if (test_multiple_operations()) passed++;
-
-    std::cout << "\n=== RESULTS ===\n";
-    std::cout << "PASSED: " << passed << "/" << total << " tests\n";
-
-    if (passed == total) {
-        std::cout << "✓ All tests passed!\n";
-        return 0;
+void check(bool condition, const std::string& testName, const std::string& detail = "") {
+    ++g_total;
+    if (condition) {
+        std::cout << "[PASS] " << testName << "\n";
     } else {
-        std::cout << "✗ Some tests failed!\n";
-        return 1;
+        ++g_failures;
+        std::cout << "[FAIL] " << testName;
+        if (!detail.empty()) std::cout << " -- " << detail;
+        std::cout << "\n";
     }
+}
+
+// Small helper: place several Black stones without triggering foul checks,
+// so we can set up a board position before testing the *actual* move.
+void placeBlacks(Board& board, std::initializer_list<Position> positions) {
+    for (const auto& p : positions) {
+        board.placeStone(p, Stone::BLACK);
+    }
+}
+
+void placeWhites(Board& board, std::initializer_list<Position> positions) {
+    for (const auto& p : positions) {
+        board.placeStone(p, Stone::WHITE);
+    }
+}
+
+} // namespace
+
+int main() {
+    // -------------------------------------------------------------------
+    // Test 1: Classic double-three (the exact shape from the screenshot).
+    //
+    //         col: 11 12 13
+    //   row 7:      .  B  .
+    //   row 8:      B  ?  B      <- ? is the move under test
+    //   row 9:      .  B  .
+    //
+    // Pre-existing Black stones form the four flanks of a plus shape.
+    // Playing (8,12) simultaneously completes:
+    //   - horizontal open three at row 8: cols 11-13
+    //   - vertical   open three at col 12: rows 7-9
+    // This must be forbidden.
+    // -------------------------------------------------------------------
+    {
+        Board board;
+        board.reset();
+        placeBlacks(board, {
+            {7, 12},   // vertical top flank
+            {9, 12},   // vertical bottom flank
+            {8, 11},   // horizontal left flank
+            {8, 13},   // horizontal right flank
+        });
+
+        bool foul = RuleChecker::isRenjuFoul(board, Position{8, 12});
+        check(foul, "Test 1: classic double-three is a foul",
+              "expected true, got false — double-three not detected");
+    }
+
+    // -------------------------------------------------------------------
+    // Test 2: Only ONE open three is created — must NOT be a foul.
+    // Same as Test 1 but without the vertical flanks.
+    // -------------------------------------------------------------------
+    {
+        Board board;
+        board.reset();
+        placeBlacks(board, {
+            {8, 11},
+            {8, 13},
+        });
+
+        bool foul = RuleChecker::isRenjuFoul(board, Position{8, 12});
+        check(!foul, "Test 2: single open three is NOT a foul",
+              "expected false, got true — false positive on a single three");
+    }
+
+    // -------------------------------------------------------------------
+    // Test 3: Double-three where ONE axis is a BROKEN three.
+    //
+    // Move under test: (8, 11)
+    //
+    // Horizontal axis (row 8), existing stones at col 10 and col 13:
+    //   col:   9 10 11 12 13 14
+    //   before: .  B  ?  .  B  .
+    //   after playing (8,11): . B B . B .  -> NOT contiguous, so this
+    //   axis alone is not the broken-three; it's a plain flank setup.
+    //   (Kept simple/non-contributing here so the vertical axis below is
+    //   the one actually under test for "broken".)
+    //
+    // Vertical axis (col 11), existing stones at row 6 and row 9, with the
+    // move filling row 8 — leaving row 7 as the internal gap:
+    //   row:    6  7  8  9
+    //   before: B  .  ?  B
+    //   after playing (8,11): B . B B  -> this is a BROKEN three
+    //   (".B.bitboard." pattern once padded with the surrounding empties),
+    //   which must still register as a live three via simulate-and-check.
+    //
+    // Horizontal axis (row 8) additionally gets a clean flanking pair so
+    // that TWO axes are live simultaneously, making the move a foul:
+    //   existing stones at (8, 9) and (8, 13); move at (8, 11):
+    //   col:    9 10 11 12 13
+    //   before: B  .  ?  .  B
+    //   after:  B  .  B  .  B   -> not contiguous either; instead use
+    //   adjacent flanks so it collapses into a real three:
+    // -------------------------------------------------------------------
+    {
+        Board board;
+        board.reset();
+        placeBlacks(board, {
+            // Vertical broken three through (8,11): rows 6 and 9, move
+            // fills row 8, leaving row 7 as the internal gap.
+            {6, 11},
+            {9, 11},
+            // Horizontal plain three through (8,11): flanks directly
+            // adjacent to the move so it collapses into ".bitboardB." (live).
+            {8, 10},
+            {8, 12},
+        });
+
+        bool foul = RuleChecker::isRenjuFoul(board, Position{8, 11});
+        check(foul, "Test 3: double-three with a broken three on one axis is a foul",
+              "expected true, got false — broken-three axis not detected");
+    }
+
+    // -------------------------------------------------------------------
+    // Test 4: A three blocked on one end is a FOUR-threat but NOT a live
+    // three (can't become an open/unstoppable four), so it must not count
+    // toward the double-three foul.
+    //
+    // Move under test: (8, 12)
+    //   row 8, cols 9..13: W  B  B  [?]  .
+    //   after playing (8,12): W B B B .  == "WbitboardB."
+    // This is a real threat (hasFourThreat should catch it if it were 4
+    // stones — here it's still only a three), but crucially it can be
+    // fully shut down by White playing the single remaining empty cell,
+    // so isLiveThree must return false for this axis, and this move alone
+    // must not be flagged as a foul.
+    // -------------------------------------------------------------------
+    {
+        Board board;
+        board.reset();
+        placeWhites(board, { {8, 9} });
+        placeBlacks(board, { {8, 10}, {8, 11} });
+
+        bool foul = RuleChecker::isRenjuFoul(board, Position{8, 12});
+        check(!foul, "Test 4: a three blocked on one side is NOT live (not a foul alone)",
+              "expected false, got true — blocked three incorrectly counted as live");
+    }
+
+    // -------------------------------------------------------------------
+    // Test 5: Double-four must be a foul.
+    // Horizontal: .bitboardbitboard. type four via existing B B _ B with move filling.
+    // Vertical:   same idea on the other axis.
+    // -------------------------------------------------------------------
+    {
+        Board board;
+        board.reset();
+        placeBlacks(board, {
+            // Horizontal four-threat through (8,12): B B [?] B .
+            {8, 10}, {8, 11}, {8, 13},
+            // Vertical four-threat through (8,12): B B [?] B .
+            {6, 12}, {7, 12}, {9, 12},
+        });
+
+        bool foul = RuleChecker::isRenjuFoul(board, Position{8, 12});
+        check(foul, "Test 5: double-four is a foul",
+              "expected true, got false — double-four not detected");
+    }
+
+    // -------------------------------------------------------------------
+    // Test 6: Overline (6+) must always be a foul, even without any
+    // three/four logic being relevant.
+    // -------------------------------------------------------------------
+    {
+        Board board;
+        board.reset();
+        placeBlacks(board, { {8, 8}, {8, 9}, {8, 10}, {8, 11}, {8, 12} });
+
+        bool foul = RuleChecker::isRenjuFoul(board, Position{8, 13});
+        check(foul, "Test 6: overline (6 in a row) is a foul",
+              "expected true, got false — overline not detected");
+    }
+
+    // -------------------------------------------------------------------
+    // Test 7: An exact five-in-a-row is a WIN, never a foul — even if the
+    // same move would otherwise look like it creates extra threats.
+    // -------------------------------------------------------------------
+    {
+        Board board;
+        board.reset();
+        placeBlacks(board, { {8, 8}, {8, 9}, {8, 10}, {8, 11} });
+
+        bool foul = RuleChecker::isRenjuFoul(board, Position{8, 12});
+        check(!foul, "Test 7: exact five-in-a-row is NOT a foul",
+              "expected false, got true — five wrongly flagged as a foul");
+    }
+
+    std::cout << "\n" << (g_total - g_failures) << "/" << g_total << " tests passed.\n";
+    return g_failures == 0 ? 0 : 1;
 }

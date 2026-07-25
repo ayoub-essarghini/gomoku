@@ -1,4 +1,5 @@
 a.out
-gomoku
+gomo
 obj/
 run_tests
+Makefile

@@ -10,6 +10,8 @@
 //
 #include <gomoku/Rules.hpp>
 #include <gomoku/Board.hpp>
+#include <gomoku/Minmax.hpp>
+#include <cmath>
 #include <iostream>
 #include <string>
 
@@ -212,6 +214,112 @@ int main() {
         bool foul = RuleChecker::isRenjuFoul(board, Position{8, 12});
         check(!foul, "Test 7: exact five-in-a-row is NOT a foul",
               "expected false, got true — five wrongly flagged as a foul");
+    }
+
+    // -------------------------------------------------------------------
+    // Minimax AI tests
+    // -------------------------------------------------------------------
+    {
+        Board board;
+        MinimaxAI ai(2);
+
+        Position move = ai.findBestMove(
+            board, Stone::BLACK, RuleVariant::STANDARD, 0, 0);
+
+        check(move.x == 9 && move.y == 9,
+              "AI Test 1: empty board starts in the center");
+    }
+
+    {
+        Board board;
+        MinimaxAI ai(2);
+        placeWhites(board, { {9, 5}, {9, 6}, {9, 7}, {9, 8} });
+        placeBlacks(board, { {8, 5}, {8, 7} });
+
+        Position move = ai.findBestMove(
+            board, Stone::WHITE, RuleVariant::STANDARD, 0, 0);
+
+        bool completesFive =
+            (move.x == 9 && move.y == 4) ||
+            (move.x == 9 && move.y == 9);
+
+        check(completesFive,
+              "AI Test 2: AI takes an immediate winning move");
+    }
+
+    {
+        Board board;
+        MinimaxAI ai(2);
+        placeBlacks(board, { {9, 5}, {9, 6}, {9, 7}, {9, 8} });
+        placeWhites(board, { {8, 5}, {8, 7} });
+
+        Position move = ai.findBestMove(
+            board, Stone::WHITE, RuleVariant::STANDARD, 0, 0);
+
+        bool blocksFive =
+            (move.x == 9 && move.y == 4) ||
+            (move.x == 9 && move.y == 9);
+
+        check(blocksFive,
+              "AI Test 3: AI blocks an immediate loss");
+    }
+
+    {
+        Board board;
+        MinimaxAI ai(2);
+        placeWhites(board, { {9, 5} });
+        placeBlacks(board, { {9, 6}, {9, 7} });
+
+        int blackBefore = board.countStones(Stone::BLACK);
+        int whiteBefore = board.countStones(Stone::WHITE);
+
+        Position move = ai.findBestMove(
+            board, Stone::WHITE, RuleVariant::STANDARD, 0, 4);
+
+        check(move.x == 9 && move.y == 8,
+              "AI Test 4: AI takes a capture victory");
+
+        check(board.countStones(Stone::BLACK) == blackBefore &&
+                  board.countStones(Stone::WHITE) == whiteBefore &&
+                  board.isEmpty(move),
+              "AI Test 5: search does not mutate the real board");
+    }
+
+    {
+        Board board;
+        MinimaxAI ai(1);
+        placeBlacks(board, { {9, 9} });
+        placeWhites(board, { {0, 0} });
+
+        Position move = ai.findBestMove(
+            board, Stone::BLACK, RuleVariant::PRO, 0, 0);
+
+        bool outsideCenterFive =
+            std::abs(move.x - 9) > 2 ||
+            std::abs(move.y - 9) > 2;
+
+        check(move.x >= 0 && move.y >= 0 && outsideCenterFive,
+              "AI Test 6: AI respects the Pro third-move restriction");
+    }
+
+    {
+        Board board;
+        MinimaxAI ai(1);
+        placeBlacks(board, {
+            {7, 12},
+            {9, 12},
+            {8, 11},
+            {8, 13},
+        });
+
+        Position move = ai.findBestMove(
+            board, Stone::BLACK, RuleVariant::RENJU, 0, 0);
+
+        bool avoidedDoubleThree =
+            move.x != 8 || move.y != 12;
+
+        check(move.x >= 0 && move.y >= 0 && avoidedDoubleThree,
+              "AI Test 7: Black AI avoids a Renju double-three foul");
     }
 
     std::cout << "\n" << (g_total - g_failures) << "/" << g_total << " tests passed.\n";

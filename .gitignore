@@ -1,5 +1,6 @@
 a.out
 gomo
+./gomoku
 obj/
 run_tests
 Makefile

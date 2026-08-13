@@ -1,7 +1,6 @@
 #include <gomoku/Rules.hpp>
 #include <cmath>
 #include <string>
-#include <iostream>
 
 Bitboard RuleChecker::extractBitboard(const Board& board, Stone color) {
     Bitboard bitboard;
@@ -175,7 +174,6 @@ bool RuleChecker::isRenjuFoul(const Board& board, const Position& pos) {
 
     for (const auto& d : dirs) {
         std::string line = extractLine(tempBoard, pos.x, pos.y, d[0], d[1], radius);
-        std::cout << "line :" << line << std::endl;
         if (hasFourThreat(line)) {
             ++fourCount;
         }
@@ -183,8 +181,6 @@ bool RuleChecker::isRenjuFoul(const Board& board, const Position& pos) {
             ++threeCount;
         }
     }
-    std::cout << "count_four : " << fourCount << std::endl;
-    std::cout << "count_three : " << threeCount << std::endl;
     if (fourCount >= 2) {
         return true; // double-four
     }
@@ -309,4 +305,4 @@ int RuleChecker::applyCaptures(Board& board, const Position& pos, Stone color) {
     }
  
     return capturedPairs;
-} 
+}

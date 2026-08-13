@@ -1,5 +1,6 @@
 #include <gomoku/ui/UIBoard.hpp>
 #include <gomoku/Rules.hpp>
+#include <chrono>
 #include <iostream>
 #include <cmath>
 namespace
@@ -27,6 +28,8 @@ void UIBoard::resetGameState()
     blackCaptures_ = 0;
     whiteCaptures_ = 0;
     lastAiTimeMs_ = 0.f;
+    hasForbiddenMarker_ = false;
+    forbiddenPos_ = Position{-1, -1};
     statusMessage_ = "Game in progress";
     winnerName_ = "";
 }
@@ -80,6 +83,7 @@ void UIBoard::init()
                 }
             }
         }
+        performAiTurn();
         mousePosition_ = sf::Mouse::getPosition(window_);
         window_.clear();
         if (screen_ == Screen::ModeSelect)
@@ -90,6 +94,9 @@ void UIBoard::init()
         {
             drawBoard();
             drawPanel();
+
+            if (gameOver_)
+                drawGameOverOverlay();
         }
 
         window_.display();
@@ -117,6 +124,14 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
     if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 180 && mousePos.y <= 205)
     {
         uint8_t nextRule = (static_cast<uint8_t>(ruleVariant_) + 1) % 5;
+
+        while (mode_ == GameMode::HumanVsAI &&
+               (nextRule == static_cast<uint8_t>(RuleVariant::SWAP) ||
+                nextRule == static_cast<uint8_t>(RuleVariant::SWAP2)))
+        {
+            nextRule = (nextRule + 1) % 5;
+        }
+
         ruleVariant_ = static_cast<RuleVariant>(nextRule);
         resetGameState();
         return true;
@@ -189,13 +204,19 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
 
 bool UIBoard::handleClick(sf::Vector2i mousePos)
 {
-    if (gameOver_)
-        return false;
-
     // Route panel interaction
     if (mousePos.x >= 800)
     {
         return handlePanelClick(mousePos);
+    }
+
+    if (gameOver_)
+        return false;
+
+    if (mode_ == GameMode::HumanVsAI && currentTurn_ == aiColor_)
+    {
+        statusMessage_ = "AI is thinking";
+        return false;
     }
 
     const bool inOpening = (ruleVariant_ == RuleVariant::SWAP2 || ruleVariant_ == RuleVariant::SWAP)
@@ -219,7 +240,17 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
     if (col < 0 || col > maxIndex || row < 0 || row > maxIndex)
         return false;
 
-    Position boardPos{row, col};
+    return playMove(Position{row, col});
+}
+
+bool UIBoard::playMove(const Position &boardPos)
+{
+    if (gameOver_)
+        return false;
+
+    const bool inOpening = (ruleVariant_ == RuleVariant::SWAP2 || ruleVariant_ == RuleVariant::SWAP)
+                            && !openingManager_.isOpeningFinished();
+
     int currentMoveCount = board_.countStones(Stone::BLACK) + board_.countStones(Stone::WHITE) + 1;
 
     // 1. Validate Pro Rule Conditions
@@ -315,6 +346,50 @@ bool UIBoard::handleClick(sf::Vector2i mousePos)
     return true;
 }
 
+void UIBoard::performAiTurn()
+{
+    if (screen_ != Screen::Game ||
+        mode_ != GameMode::HumanVsAI ||
+        gameOver_ ||
+        currentTurn_ != aiColor_)
+    {
+        return;
+    }
+
+    if (ruleVariant_ == RuleVariant::SWAP || ruleVariant_ == RuleVariant::SWAP2)
+    {
+        statusMessage_ = "AI unavailable for Swap openings";
+        return;
+    }
+
+    if (!openingManager_.isOpeningFinished())
+        return;
+
+    statusMessage_ = "AI is thinking";
+    const auto startTime = std::chrono::steady_clock::now();
+
+    const Position selectedMove = ai_.findBestMove(
+        board_,
+        aiColor_,
+        ruleVariant_,
+        blackCaptures_,
+        whiteCaptures_);
+
+    const auto endTime = std::chrono::steady_clock::now();
+    lastAiTimeMs_ = std::chrono::duration<float, std::milli>(endTime - startTime).count();
+
+    if (selectedMove.x < 0 || selectedMove.y < 0)
+    {
+        gameOver_ = true;
+        winnerName_ = "None";
+        statusMessage_ = "AI found no legal move";
+        return;
+    }
+
+    if (!playMove(selectedMove))
+        statusMessage_ = "AI selected an invalid move";
+}
+
 void UIBoard::drawBoard()
 {
     sf::RectangleShape boardBg(sf::Vector2f(BOARD_PIXEL_SIZE, BOARD_PIXEL_SIZE));
@@ -371,6 +446,30 @@ void UIBoard::drawText(const std::string &text, float x, float y, unsigned int s
     label.setFillColor(sf::Color(245, 245, 245));
     label.setPosition({x, y});
     window_.draw(label);
+}
+
+void UIBoard::drawGameOverOverlay()
+{
+    sf::RectangleShape backdrop(sf::Vector2f(640.f, 250.f));
+    backdrop.setPosition({80.f, 285.f});
+    backdrop.setFillColor(sf::Color(20, 23, 26, 240));
+    backdrop.setOutlineThickness(4.f);
+    backdrop.setOutlineColor(sf::Color(222, 184, 135));
+    window_.draw(backdrop);
+
+    sf::RectangleShape accent(sf::Vector2f(560.f, 4.f));
+    accent.setPosition({120.f, 360.f});
+    accent.setFillColor(sf::Color(222, 184, 135));
+    window_.draw(accent);
+
+    const std::string result = winnerName_ == "None"
+                                   ? "DRAW GAME"
+                                   : winnerName_ + " WINS!";
+
+    drawText("GAME OVER", 270.f, 310.f, 34);
+    drawText(result, 260.f, 385.f, 28);
+    drawText(statusMessage_, 145.f, 435.f, 18);
+    drawText("Use [ New Game ] or [ Mode ] to continue", 130.f, 485.f, 16);
 }
 
 void UIBoard::drawPanel()
@@ -478,6 +577,10 @@ bool UIBoard::handleModeSelectClick(sf::Vector2i mousePos)
     if (isInsideRect(mousePos, humanVsAiButton))
     {
         mode_ = GameMode::HumanVsAI;
+
+        if (ruleVariant_ == RuleVariant::SWAP || ruleVariant_ == RuleVariant::SWAP2)
+            ruleVariant_ = RuleVariant::STANDARD;
+
         screen_ = Screen::Game;
         resetGameState();
         return true;

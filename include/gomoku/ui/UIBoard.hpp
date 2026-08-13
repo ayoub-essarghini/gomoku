@@ -2,6 +2,7 @@
 
 #include <SFML/Graphics.hpp>
 #include <gomoku/Board.hpp>
+#include <gomoku/Minmax.hpp>
 #include <gomoku/Rules.hpp>
 #include <vector>
 #include <string>
@@ -44,6 +45,8 @@ private:
 
     Board board_;
     Stone currentTurn_{Stone::BLACK};
+    Stone aiColor_{Stone::WHITE};
+    MinimaxAI ai_{3};
     bool gameOver_{false};
 
     RuleVariant ruleVariant_{RuleVariant::STANDARD};
@@ -62,11 +65,14 @@ private:
     bool handleClick(sf::Vector2i mousePos);
     bool handleModeSelectClick(sf::Vector2i mousePos);
     bool handlePanelClick(sf::Vector2i mousePos);
+    bool playMove(const Position &position);
+    void performAiTurn();
 
     void drawBoard();
     void drawLines();
     void drawStone(const Position &pos, Stone color);
     void drawPanel();
+    void drawGameOverOverlay();
     void drawText(const std::string &text, float x, float y, unsigned int size);
     void drawModeSelect();
 

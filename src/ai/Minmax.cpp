@@ -11,6 +11,79 @@ namespace
         {1, 0},
         {1, 1},
         {1, -1}};
+    
+    struct Window{
+        int minRow;
+        int MaxRow;
+        int minColums;
+        int maxColums;
+    };
+
+    bool areClose(
+        const Position& first,
+        const Position& second,
+    ){
+        return  std::abs(first.y - second.y) <= CANDIDATE_RADIUS && 
+                std::abs(first.x - second.x) ,= CANDIDATE_RADIUS;
+    }
+
+    bool windowsOverlap(
+        const Window& first,
+        const Window& second
+    ){
+        return !(first.MaxRow < second.minRow || 
+                    second.MaxRow < first.MaxRow ||
+                    first.maxColums < second.minColums ||
+                    second.maxColums < first.minColums        
+                );
+    }
+
+    Window mergeWindows(
+        const Window& first,
+        const Window& second
+    ){
+        return Window{
+            std::min(first.minRow, second.minRow),
+            std::max(first.maxRow, second.maxRow),
+            std::min(first.minColums, second.minColums),
+            std::max(first.maxColums, second.maxColums),
+        };
+    }
+    
+    Window buildWindowsForCluster(
+        const std::vector<Position>& cluster
+    ){
+        int minRow = Board::HEIGHT - 1;
+        int maxRow = 0;
+        int minColums = Board::WIDTH - 1;
+        int maxColums = 0;
+
+        for (const Position& stone : cluster){
+            minRow = std::min(minRow, stone.y);
+            maxRow = std::max(maxRow, stone.y);
+            minColums = std::min(minColums, stone.x);
+            maxColums = std::max(maxColums, stone.x);
+        }
+
+        minRow -= WINDOWS_MARGIN;
+        maxRow += WINDOWS_MARGIN;
+
+        minColums -= WINDOWS_MARGIN;
+        maxColums += WINDOWS_MARGIN;
+
+        minRow = std::max(0, minRow);
+        maxRow = std::min(Board::HEIGHT - 1, maxRow);
+
+        minColums = std::max(0, minColums);
+        maxColums = std::min(Board::WIDTH - 1, maxColums);
+
+        return Window{
+            minRow,
+            MaxRow,
+            minColums,
+            maxColums
+        };
+    }
 
     bool isInsideBoard(int row, int column)
     {
@@ -19,6 +92,7 @@ namespace
                column >= 0 &&
                column < Board::WIDTH;
     }
+
 }
 
 MinimaxAI::MinimaxAI(int maxDepth)

@@ -6,11 +6,6 @@
 
 namespace
 {
-    constexpr int DIRECTIONS[4][2] = {
-        {0, 1},
-        {1, 0},
-        {1, 1},
-        {1, -1}};
     
     constexpr int CANDIDATE_RADIUS = 2;
     constexpr int WINDOWS_MARGIN = 2;
@@ -35,7 +30,7 @@ namespace
         const Window& second
     ){
         return !(first.maxRow < second.minRow || 
-                    second.maxRow < first.maxRow ||
+                    second.maxRow < first.minRow ||
                     first.maxColums < second.minColums ||
                     second.maxColums < first.minColums        
                 );
@@ -181,13 +176,6 @@ namespace
         return mergeWindowsUntilStable(std::move(windows));
     }
 
-    bool isInsideBoard(int row, int column)
-    {
-        return row >= 0 &&
-               row < Board::HEIGHT &&
-               column >= 0 &&
-               column < Board::WIDTH;
-    }
 
 }
 
@@ -213,8 +201,11 @@ Position MinimaxAI::findBestMove(
 {
     SearchState rootState{
         board,
+        RuleChecker::extractBitboard(board, Stone::BLACK),
+        RuleChecker::extractBitboard(board, Stone::WHITE),
         blackCaptures,
-        whiteCaptures};
+        whiteCaptures
+    };
 
     std::vector<Position> moves =
         generateMoves(board, aiColor, variant);
@@ -357,15 +348,8 @@ std::optional<int> MinimaxAI::getTerminalScore(
     }
     else
     {
-        Bitboard blackBitboard =
-            RuleChecker::extractBitboard(
-                state.board,
-                Stone::BLACK);
-
-        Bitboard whiteBitboard =
-            RuleChecker::extractBitboard(
-                state.board,
-                Stone::WHITE);
+        const Bitboard& blackBitboard = state.black;
+        const Bitboard& whiteBitboard = state.white;
 
         bool blackHasFive =
             RuleChecker::hasFiveInARow(blackBitboard);
@@ -408,32 +392,50 @@ std::optional<int> MinimaxAI::getTerminalScore(
 }
 
 int MinimaxAI::evaluate(
-    const SearchState &state,
+    const SearchState& state,
     Stone aiColor) const
 {
-    Stone opponent = opponentOf(aiColor);
+    const Stone opponent =
+        opponentOf(aiColor);
 
-    int aiPatternScore =
-        evaluateColor(state.board, aiColor);
+    const Bitboard& aiBitboard =
+        aiColor == Stone::BLACK
+            ? state.black
+            : state.white;
 
-    int opponentPatternScore =
-        evaluateColor(state.board, opponent);
+    const Bitboard& opponentBitboard =
+        opponent == Stone::BLACK
+            ? state.black
+            : state.white;
 
-    int aiCaptures = aiColor == Stone::BLACK
-                         ? state.blackCaptures
-                         : state.whiteCaptures;
+    const int aiPatternScore =
+        evaluateColor(
+            aiBitboard,
+            opponentBitboard);
 
-    int opponentCaptures = opponent == Stone::BLACK
-                               ? state.blackCaptures
-                               : state.whiteCaptures;
+    const int opponentPatternScore =
+        evaluateColor(
+            opponentBitboard,
+            aiBitboard);
 
-    constexpr int CAPTURE_PAIR_SCORE = 20'000;
+    const int aiCaptures =
+        aiColor == Stone::BLACK
+            ? state.blackCaptures
+            : state.whiteCaptures;
 
-    int captureScore =
+    const int opponentCaptures =
+        opponent == Stone::BLACK
+            ? state.blackCaptures
+            : state.whiteCaptures;
+
+    constexpr int CAPTURE_PAIR_SCORE =
+        20'000;
+
+    const int captureScore =
         (aiCaptures - opponentCaptures) *
         CAPTURE_PAIR_SCORE;
 
-    int defensiveOpponentScore =
+    const int defensiveOpponentScore =
         (opponentPatternScore * 11) / 10;
 
     return aiPatternScore -
@@ -442,79 +444,255 @@ int MinimaxAI::evaluate(
 }
 
 int MinimaxAI::evaluateColor(
-    const Board &board,
-    Stone color) const
+    const Bitboard& ours,
+    const Bitboard& opponent) const
 {
     int totalScore = 0;
-    Stone opponent = opponentOf(color);
 
-    for (int row = 0; row < Board::HEIGHT; ++row)
+    // horizontal
+    for (int r = 0; r < Board::HEIGHT; ++r)
     {
-        for (int column = 0;
-             column < Board::WIDTH;
-             ++column)
+        const uint32_t ourRow = ours.rows[r];
+        const uint32_t opponentRow = opponent.rows[r];
+
+        for (int c = 0;
+             c <= Board::WIDTH - 5;
+             ++c)
         {
-            for (const auto &direction : DIRECTIONS)
+            const uint32_t mask =
+                0x1FU << c;
+
+            const uint32_t ourWindow =
+                ourRow & mask;
+
+            const uint32_t opponentWindow =
+                opponentRow & mask;
+
+            if (opponentWindow != 0)
+                continue;
+
+            const int stoneCount =
+                __builtin_popcount(ourWindow);
+
+            if (stoneCount == 0)
+                continue;
+
+            int openEnds = 0;
+
+            if (c > 0)
             {
-                int rowDirection = direction[0];
-                int columnDirection = direction[1];
+                const uint32_t before =
+                    1U << (c - 1);
 
-                int endRow =
-                    row + 4 * rowDirection;
-
-                int endColumn =
-                    column + 4 * columnDirection;
-
-                if (!isInsideBoard(endRow, endColumn))
-                    continue;
-
-                int stoneCount = 0;
-                int opponentCount = 0;
-
-                for (int step = 0; step < 5; ++step)
-                {
-                    Position position{
-                        row + step * rowDirection,
-                        column + step * columnDirection};
-
-                    if (board.hasStone(position, color))
-                    {
-                        ++stoneCount;
-                    }
-                    else if (board.hasStone(position, opponent))
-                    {
-                        ++opponentCount;
-                    }
-                }
-
-                if (opponentCount != 0)
-                    continue;
-
-                int openEnds = 0;
-
-                Position before{
-                    row - rowDirection,
-                    column - columnDirection};
-
-                Position after{
-                    endRow + rowDirection,
-                    endColumn + columnDirection};
-
-                if (isInsideBoard(before.x, before.y) &&
-                    board.isEmpty(before))
-                {
+                if (((ourRow | opponentRow) & before) == 0)
                     ++openEnds;
-                }
-
-                if (isInsideBoard(after.x, after.y) &&
-                    board.isEmpty(after))
-                {
-                    ++openEnds;
-                }
-
-                totalScore +=
-                    evaluateWindow(stoneCount, openEnds);
             }
+
+            if (c + 5 < Board::WIDTH)
+            {
+                const uint32_t after =
+                    1U << (c + 5);
+
+                if (((ourRow | opponentRow) & after) == 0)
+                    ++openEnds;
+            }
+
+            totalScore +=
+                evaluateWindow(
+                    stoneCount,
+                    openEnds);
+        }
+    }
+
+    // vertical
+    for (int r = 0;
+         r <= Board::HEIGHT - 5;
+         ++r)
+    {
+        for (int c = 0;
+             c < Board::WIDTH;
+             ++c)
+        {
+            const uint32_t bit =
+                1U << c;
+
+            int stoneCount = 0;
+            bool blocked = false;
+
+            for (int i = 0; i < 5; ++i)
+            {
+                if (opponent.rows[r + i] & bit)
+                {
+                    blocked = true;
+                    break;
+                }
+
+                if (ours.rows[r + i] & bit)
+                    ++stoneCount;
+            }
+
+            if (blocked || stoneCount == 0)
+                continue;
+
+            int openEnds = 0;
+
+            if (r > 0)
+            {
+                const uint32_t occupied =
+                    ours.rows[r - 1] |
+                    opponent.rows[r - 1];
+
+                if ((occupied & bit) == 0)
+                    ++openEnds;
+            }
+
+            if (r + 5 < Board::HEIGHT)
+            {
+                const uint32_t occupied =
+                    ours.rows[r + 5] |
+                    opponent.rows[r + 5];
+
+                if ((occupied & bit) == 0)
+                    ++openEnds;
+            }
+
+            totalScore +=
+                evaluateWindow(
+                    stoneCount,
+                    openEnds);
+        }
+    }
+
+    // diagonal down-right
+    for (int r = 0;
+         r <= Board::HEIGHT - 5;
+         ++r)
+    {
+        for (int c = 0;
+             c <= Board::WIDTH - 5;
+             ++c)
+        {
+            int stoneCount = 0;
+            bool blocked = false;
+
+            for (int i = 0; i < 5; ++i)
+            {
+                const uint32_t bit =
+                    1U << (c + i);
+
+                if (opponent.rows[r + i] & bit)
+                {
+                    blocked = true;
+                    break;
+                }
+
+                if (ours.rows[r + i] & bit)
+                    ++stoneCount;
+            }
+
+            if (blocked || stoneCount == 0)
+                continue;
+
+            int openEnds = 0;
+
+            if (r > 0 && c > 0)
+            {
+                const uint32_t bit =
+                    1U << (c - 1);
+
+                const uint32_t occupied =
+                    ours.rows[r - 1] |
+                    opponent.rows[r - 1];
+
+                if ((occupied & bit) == 0)
+                    ++openEnds;
+            }
+
+            if (r + 5 < Board::HEIGHT &&
+                c + 5 < Board::WIDTH)
+            {
+                const uint32_t bit =
+                    1U << (c + 5);
+
+                const uint32_t occupied =
+                    ours.rows[r + 5] |
+                    opponent.rows[r + 5];
+
+                if ((occupied & bit) == 0)
+                    ++openEnds;
+            }
+
+            totalScore +=
+                evaluateWindow(
+                    stoneCount,
+                    openEnds);
+        }
+    }
+
+    // diagonal down-left
+    for (int r = 0;
+         r <= Board::HEIGHT - 5;
+         ++r)
+    {
+        for (int c = 4;
+             c < Board::WIDTH;
+             ++c)
+        {
+            int stoneCount = 0;
+            bool blocked = false;
+
+            for (int i = 0; i < 5; ++i)
+            {
+                const uint32_t bit =
+                    1U << (c - i);
+
+                if (opponent.rows[r + i] & bit)
+                {
+                    blocked = true;
+                    break;
+                }
+
+                if (ours.rows[r + i] & bit)
+                    ++stoneCount;
+            }
+
+            if (blocked || stoneCount == 0)
+                continue;
+
+            int openEnds = 0;
+
+            if (r > 0 &&
+                c + 1 < Board::WIDTH)
+            {
+                const uint32_t bit =
+                    1U << (c + 1);
+
+                const uint32_t occupied =
+                    ours.rows[r - 1] |
+                    opponent.rows[r - 1];
+
+                if ((occupied & bit) == 0)
+                    ++openEnds;
+            }
+
+            if (r + 5 < Board::HEIGHT &&
+                c - 5 >= 0)
+            {
+                const uint32_t bit =
+                    1U << (c - 5);
+
+                const uint32_t occupied =
+                    ours.rows[r + 5] |
+                    opponent.rows[r + 5];
+
+                if ((occupied & bit) == 0)
+                    ++openEnds;
+            }
+
+            totalScore +=
+                evaluateWindow(
+                    stoneCount,
+                    openEnds);
         }
     }
 
@@ -695,21 +873,26 @@ int MinimaxAI::scoreMoveForOrdering(
 
     orderingScore += capturedPairs * CAPTURE_ORDER_SCORE;
 
-    Bitboard attackingBitboard =
+    Bitboard attackingPlayer =
+    RuleChecker::extractBitboard(
+        attackingBoard,
+        player);
+
+    Bitboard attackingOpponent =
         RuleChecker::extractBitboard(
             attackingBoard,
-            player);
+        opponentOf(player));
 
     bool createsFive =
-        RuleChecker::hasFiveInARow(
-            attackingBitboard);
-
+    RuleChecker::hasFiveInARow(
+        attackingPlayer);
+    
     bool createsIllegalBlackOverline =
         variant == RuleVariant::RENJU &&
         player == Stone::BLACK &&
         RuleChecker::hasOverline(
-            attackingBitboard);
-
+            attackingPlayer);
+    
     if (createsFive &&
         !createsIllegalBlackOverline)
     {
@@ -765,7 +948,9 @@ int MinimaxAI::scoreMoveForOrdering(
     }
 
     orderingScore +=
-        evaluateColor(attackingBoard, player);
+    evaluateColor(
+        attackingPlayer,
+        attackingOpponent);
 
     int centerRow = Board::HEIGHT / 2;
     int centerColumn = Board::WIDTH / 2;

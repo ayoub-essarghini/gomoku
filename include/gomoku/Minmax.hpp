@@ -5,6 +5,8 @@
 
 #include <optional>
 #include <vector>
+#include <bit>
+#include <cstdint>
 
 class MinimaxAI
 {
@@ -22,6 +24,10 @@ private:
     struct SearchState
     {
         Board board;
+
+        Bitboard black;
+        Bitboard white;
+
         int blackCaptures;
         int whiteCaptures;
     };
@@ -57,8 +63,8 @@ private:
         Stone aiColor) const;
 
     int evaluateColor(
-        const Board &board,
-        Stone color) const;
+        const Bitboard &ours,
+        const Bitboard &opponent) const;
 
     int evaluateWindow(
         int stoneCount,

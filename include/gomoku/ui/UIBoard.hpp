@@ -46,7 +46,7 @@ private:
     Board board_;
     Stone currentTurn_{Stone::BLACK};
     Stone aiColor_{Stone::WHITE};
-    MinimaxAI ai_{3};
+    MinimaxAI ai_{10};
     bool gameOver_{false};
 
     RuleVariant ruleVariant_{RuleVariant::STANDARD};

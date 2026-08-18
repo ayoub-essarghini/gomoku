@@ -12,27 +12,30 @@ namespace
         {1, 1},
         {1, -1}};
     
+    constexpr int CANDIDATE_RADIUS = 2;
+    constexpr int WINDOWS_MARGIN = 2;
+
     struct Window{
         int minRow;
-        int MaxRow;
+        int maxRow;
         int minColums;
         int maxColums;
     };
 
     bool areClose(
         const Position& first,
-        const Position& second,
-    ){
-        return  std::abs(first.y - second.y) <= CANDIDATE_RADIUS && 
-                std::abs(first.x - second.x) ,= CANDIDATE_RADIUS;
+        const Position& second)
+    {
+        return  std::abs(first.x - second.x) <= CANDIDATE_RADIUS && 
+                std::abs(first.y - second.y) <= CANDIDATE_RADIUS;
     }
 
     bool windowsOverlap(
         const Window& first,
         const Window& second
     ){
-        return !(first.MaxRow < second.minRow || 
-                    second.MaxRow < first.MaxRow ||
+        return !(first.maxRow < second.minRow || 
+                    second.maxRow < first.maxRow ||
                     first.maxColums < second.minColums ||
                     second.maxColums < first.minColums        
                 );
@@ -49,7 +52,7 @@ namespace
             std::max(first.maxColums, second.maxColums),
         };
     }
-    
+
     Window buildWindowsForCluster(
         const std::vector<Position>& cluster
     ){
@@ -59,10 +62,10 @@ namespace
         int maxColums = 0;
 
         for (const Position& stone : cluster){
-            minRow = std::min(minRow, stone.y);
-            maxRow = std::max(maxRow, stone.y);
-            minColums = std::min(minColums, stone.x);
-            maxColums = std::max(maxColums, stone.x);
+            minRow = std::min(minRow, stone.x);
+            maxRow = std::max(maxRow, stone.x);
+            minColums = std::min(minColums, stone.y);
+            maxColums = std::max(maxColums, stone.y);
         }
 
         minRow -= WINDOWS_MARGIN;
@@ -79,10 +82,103 @@ namespace
 
         return Window{
             minRow,
-            MaxRow,
+            maxRow,
             minColums,
             maxColums
         };
+    }
+
+    std::vector<Position> collectStones(const Board& board){
+        std::vector<Position> stones;
+
+        for(int row = 0;  row < Board::HEIGHT; ++row){
+            for (int column = 0; column < Board::WIDTH; ++column){
+                Position pos {row, column};
+                if (!board.isEmpty(pos)){
+                    stones.push_back(pos);
+                }
+            }
+        }
+        return stones;
+    }
+    
+    std::vector<std::vector<Position>> buildClusters(
+        const std::vector<Position>& stones
+    ){
+        std::vector<std::vector<Position>> clusters;
+        if(stones.empty())
+            return clusters;
+        std::vector<bool> visited(stones.size(), false);
+        for (std::size_t start = 0; start < stones.size(); start++){
+            if (visited[start])
+                continue;
+            std::vector<Position> cluster;
+
+            std::vector<std::size_t> queue;
+
+            queue.push_back(start);
+            visited[start] = true;
+
+            std::size_t queue_index = 0;
+
+            while(queue_index < queue.size()){
+                std::size_t current_index = queue[queue_index++];
+                cluster.push_back(stones[current_index]);
+                for (std::size_t i =0; i < stones.size() ; ++i){
+                    if (visited[i])
+                        continue;
+                    if (areClose(stones[current_index], stones[i])){
+                        visited[i] = true;
+                        queue.push_back(i);
+                    }
+                }
+            }
+            clusters.push_back(std::move(cluster));
+        }
+        return clusters;
+    }
+    
+    std::vector<Window> buildInitialWindows(const Board& board){
+        const std::vector<Position> stones = collectStones(board);
+        const std::vector<vector<Position>> clusters = buildClusters(stones);
+
+        std::vector<Window> windows;
+
+        windows.reserve(clusters.size());
+
+        for (const auto& cluster : clusters){
+            windows.push_back(buildWindowsForCluster(cluster));
+        }
+        return windows;
+    }
+
+    std::vector<Window> mergeWindowsUntilStable(std::vector<Window> windows){
+        bool merged = true;
+
+        while(merged){
+            merged = false;
+            for (std::size_t i = 0; i <  windows.size(); ++i){
+                for(std::size_t j = i + 1; j < windows.size(); ++j){
+                    if (!windowsOverlap(windows[i], windows[j])){
+                        continue;
+                    }
+                    windows[i] = mergeWindows(windows[i], windows[j]);
+                    windows.erase(windows.begin() + static_cast<std::ptrdiff_t>(j));
+
+                    merged = true;
+                    break;
+                }
+            }
+            if (merged){
+                break;
+            }
+        }
+        return windows;
+    }
+
+    std::vector<Window> buildOptimzedWindows(const Board& board){
+        std::vector<Window> windows = buildInitialWindows(board);
+        return mergeWindowsUntilStable(std::move(windows));
     }
 
     bool isInsideBoard(int row, int column)
@@ -477,54 +573,38 @@ std::vector<Position> MinimaxAI::generateMoves(
         int score;
     };
 
+    std::vector<Window> windows = buildOptimzedWindows(board);
+
     std::vector<ScoredMove> scoredMoves;
-    int moveNumber = occupiedCells + 1;
 
-    for (int row = 0; row < Board::HEIGHT; ++row)
-    {
-        for (int column = 0;
-             column < Board::WIDTH;
-             ++column)
-        {
-            Position position{row, column};
-
-            if (!board.isEmpty(position))
-                continue;
-
-            if (!hasNearbyStone(board, position))
-                continue;
-
-            if (variant == RuleVariant::PRO &&
-                !RuleChecker::isValidProMove(
-                    moveNumber,
-                    position))
-            {
-                continue;
-            }
-
-            if (variant == RuleVariant::RENJU &&
-                player == Stone::BLACK &&
-                RuleChecker::isRenjuFoul(
-                    board,
-                    position))
-            {
-                continue;
-            }
-
-            int orderingScore =
-                scoreMoveForOrdering(
-                    board,
+    for (const Window& window : windows){
+        for (int row = window.minRow; row <= window.maxRow; ++row){
+            for(int column = window.minColums; column <= window.maxColums; ++column){
+                Position position{
+                    row,
+                    column
+                };
+                if (!board.isEmpty(position) || 
+                    !hasNearbyStone(board, position))
+                    continue;
+                int moveNumber = occupiedCells + 1;
+                if (variant == RuleVariant::PRO && 
+                    !RuleChecker::isValidProMove(moveNumber, position)){
+                    continue;
+                }
+                if (variant == RuleVariant::RENJU 
+                    && player == Stone::BLACK 
+                    && !RuleChecker::isRenjuFoul(board, position)){
+                    continue;
+                }
+                int orderingScore = scoreMoveForOrdering(board, position, player, variant);
+                scoredMoves.push_back(ScoredMove{
                     position,
-                    player,
-                    variant);
-
-            scoredMoves.push_back(
-                ScoredMove{
-                    position,
-                    orderingScore});
+                    orderingScore
+                });
+            }
         }
     }
-
     std::sort(
         scoredMoves.begin(),
         scoredMoves.end(),

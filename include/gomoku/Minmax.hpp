@@ -35,7 +35,7 @@ private:
     static constexpr int WIN_SCORE = 100'000'000;
     static constexpr int INFINITY_SCORE = 1'000'000'000;
 
-    static constexpr int MAX_CANDIDATE_MOVES = 8;
+    static constexpr int MAX_CANDIDATE_MOVES = 10;
 
     static constexpr int CANDIDATE_RADIUS = 2;
 

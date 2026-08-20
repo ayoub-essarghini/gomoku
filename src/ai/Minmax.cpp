@@ -9,7 +9,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
+#include <stdio.h>
+int count_deb = 0;
 namespace
 {
     constexpr int DIRECTIONS[4][2] = {
@@ -87,7 +88,7 @@ namespace
     {
         std::uint64_t hash = 0;
         const auto &keys = zobristKeys();
-
+        printf("start\n");
         for (int row = 0; row < Board::HEIGHT; ++row)
         {
             for (int column = 0; column < Board::WIDTH; ++column)
@@ -100,6 +101,9 @@ namespace
                     hash ^= keys[row * Board::WIDTH + column][1];
             }
         }
+        printf("\n%d",count_deb);
+        printf("end\n");
+        count_deb += 1;
 
         return hash;
     }
@@ -385,8 +389,7 @@ int MinimaxAI::minimax(
     Stone aiColor,
     RuleVariant variant) const
 {
-    // The public/private MinimaxAI interface stays unchanged. The recursive
-    // implementation lives in this lambda so no new class members are needed.
+
     auto search = [this, aiColor, variant](auto &&self,
                          const SearchState &node,
                          int remainingDepth,
@@ -630,9 +633,7 @@ int MinimaxAI::evaluate(
 {
     const Stone opponent = opponentOf(aiColor);
 
-    // Evaluate both players in one board pass. The previous implementation
-    // scanned all windows once for AI and then scanned them again for the
-    // opponent.
+    
     int aiScore = 0;
     int opponentScore = 0;
 
@@ -1008,7 +1009,6 @@ std::vector<Position> MinimaxAI::generateMoves(
     const int moveNumber = occupiedCells + 1;
     std::vector<std::array<int, 4>> windows = buildWindows(board);
 
-    // Avoid duplicates when two component windows overlap.
     std::array<bool, Board::HEIGHT * Board::WIDTH> seen{};
     std::vector<ScoredMove> scoredMoves;
     scoredMoves.reserve(MAX_CANDIDATE_MOVES + 8);
@@ -1050,8 +1050,7 @@ std::vector<Position> MinimaxAI::generateMoves(
                 const int score =
                     localMoveScore(board, position, player);
 
-                // Keep a small bounded list instead of sorting hundreds of
-                // moves at every search node.
+                
                 scoredMoves.push_back({position, score});
             }
         }

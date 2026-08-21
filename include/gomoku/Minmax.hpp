@@ -5,6 +5,8 @@
 
 #include <optional>
 #include <vector>
+#include <bit>
+#include <cstdint>
 
 class MinimaxAI
 {
@@ -22,14 +24,22 @@ private:
     struct SearchState
     {
         Board board;
+
+        Bitboard black;
+        Bitboard white;
+
         int blackCaptures;
         int whiteCaptures;
     };
 
     static constexpr int WIN_SCORE = 100'000'000;
     static constexpr int INFINITY_SCORE = 1'000'000'000;
-    static constexpr int MAX_CANDIDATE_MOVES = 16;
+
+    static constexpr int MAX_CANDIDATE_MOVES = 10;
+
     static constexpr int CANDIDATE_RADIUS = 2;
+
+    static constexpr int WINDOW_MARGIN = 1;
 
     int maxDepth_;
 
@@ -53,8 +63,8 @@ private:
         Stone aiColor) const;
 
     int evaluateColor(
-        const Board &board,
-        Stone color) const;
+        const Bitboard &ours,
+        const Bitboard &opponent) const;
 
     int evaluateWindow(
         int stoneCount,

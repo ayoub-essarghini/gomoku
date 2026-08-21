@@ -3,14 +3,14 @@
 #include <algorithm>
 #include <cstddef>
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <limits>
 #include <optional>
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include <stdio.h>
-int count_deb = 0;
+
 namespace
 {
     constexpr int DIRECTIONS[4][2] = {
@@ -19,9 +19,11 @@ namespace
         {1, 1},
         {1, -1}};
 
-    constexpr int CANDIDATE_RADIUS = 2;
-
     constexpr std::size_t TRANSPOSITION_TABLE_SIZE = 1U << 20;
+
+    struct TimeUp
+    {
+    };
 
     enum class BoundType : std::uint8_t
     {
@@ -88,7 +90,7 @@ namespace
     {
         std::uint64_t hash = 0;
         const auto &keys = zobristKeys();
-        printf("start\n");
+
         for (int row = 0; row < Board::HEIGHT; ++row)
         {
             for (int column = 0; column < Board::WIDTH; ++column)
@@ -101,9 +103,6 @@ namespace
                     hash ^= keys[row * Board::WIDTH + column][1];
             }
         }
-        printf("\n%d",count_deb);
-        printf("end\n");
-        count_deb += 1;
 
         return hash;
     }
@@ -224,12 +223,16 @@ namespace
         return score;
     }
 
-    void collectStonePositions(
-        const Board &board,
-        std::vector<Position> &stones)
+    // Single bounding-box pass over all stones. Candidate cells are still
+    // filtered by hasNearbyStone() afterwards, so a disjoint-component
+    // clustering (previously O(stones^2) per node) buys nothing extra here.
+    std::vector<std::array<int, 4>> buildWindows(
+        const Board &board)
     {
-        stones.clear();
-        stones.reserve(Board::SIZE);
+        int minRow = Board::HEIGHT;
+        int maxRow = -1;
+        int minColumn = Board::WIDTH;
+        int maxColumn = -1;
 
         for (int row = 0; row < Board::HEIGHT; ++row)
         {
@@ -240,67 +243,24 @@ namespace
                 if (board.hasStone(position, Stone::BLACK) ||
                     board.hasStone(position, Stone::WHITE))
                 {
-                    stones.push_back(position);
+                    minRow = std::min(minRow, row);
+                    maxRow = std::max(maxRow, row);
+                    minColumn = std::min(minColumn, column);
+                    maxColumn = std::max(maxColumn, column);
                 }
             }
         }
-    }
 
-    std::vector<std::array<int, 4>> buildWindows(
-        const Board &board)
-    {
-        std::vector<Position> stones;
-        collectStonePositions(board, stones);
+        if (maxRow < 0)
+            return {};
 
-        std::vector<std::array<int, 4>> windows;
-        std::vector<bool> visited(stones.size(), false);
+        constexpr int windowMargin = 1;
+        minRow = std::max(0, minRow - windowMargin);
+        maxRow = std::min(Board::HEIGHT - 1, maxRow + windowMargin);
+        minColumn = std::max(0, minColumn - windowMargin);
+        maxColumn = std::min(Board::WIDTH - 1, maxColumn + windowMargin);
 
-        for (std::size_t start = 0; start < stones.size(); ++start)
-        {
-            if (visited[start])
-                continue;
-
-            int minRow = stones[start].x;
-            int maxRow = stones[start].x;
-            int minColumn = stones[start].y;
-            int maxColumn = stones[start].y;
-
-            std::vector<std::size_t> component{start};
-            visited[start] = true;
-
-            for (std::size_t index = 0; index < component.size(); ++index)
-            {
-                const Position current = stones[component[index]];
-
-                minRow = std::min(minRow, current.x);
-                maxRow = std::max(maxRow, current.x);
-                minColumn = std::min(minColumn, current.y);
-                maxColumn = std::max(maxColumn, current.y);
-
-                for (std::size_t other = 0; other < stones.size(); ++other)
-                {
-                    if (visited[other])
-                        continue;
-
-                    if (std::abs(current.x - stones[other].x) <= CANDIDATE_RADIUS &&
-                        std::abs(current.y - stones[other].y) <= CANDIDATE_RADIUS)
-                    {
-                        visited[other] = true;
-                        component.push_back(other);
-                    }
-                }
-            }
-
-            constexpr int windowMargin = 1;
-            minRow = std::max(0, minRow - windowMargin);
-            maxRow = std::min(Board::HEIGHT - 1, maxRow + windowMargin);
-            minColumn = std::max(0, minColumn - windowMargin);
-            maxColumn = std::min(Board::WIDTH - 1, maxColumn + windowMargin);
-
-            windows.push_back({minRow, maxRow, minColumn, maxColumn});
-        }
-
-        return windows;
+        return {{minRow, maxRow, minColumn, maxColumn}};
     }
 }
 
@@ -315,6 +275,47 @@ Stone MinimaxAI::opponentOf(Stone color)
     return color == Stone::BLACK ? Stone::WHITE : Stone::BLACK;
 }
 
+bool MinimaxAI::applyMove(
+    SearchState &state,
+    const Position &move,
+    Stone player) const
+{
+    if (!state.board.placeStone(move, player))
+        return false;
+
+    const int index = move.x * Board::WIDTH + move.y;
+    const auto &keys = zobristKeys();
+
+    state.hash ^= keys[static_cast<std::size_t>(index)][player == Stone::BLACK ? 0 : 1];
+
+    if (player == Stone::BLACK)
+        state.black.rows[move.x] |= (1U << move.y);
+    else
+        state.white.rows[move.x] |= (1U << move.y);
+
+    const int capturedPairs = RuleChecker::applyCaptures(
+        state.board,
+        move,
+        player);
+
+    if (player == Stone::BLACK)
+        state.blackCaptures += capturedPairs;
+    else
+        state.whiteCaptures += capturedPairs;
+
+    if (capturedPairs > 0)
+    {
+        // Captured stones' exact positions aren't reported back, so resync
+        // hash/bitboards from the board. Captures are rare, so this O(361)
+        // fallback doesn't affect the hot (non-capturing) path.
+        state.black = RuleChecker::extractBitboard(state.board, Stone::BLACK);
+        state.white = RuleChecker::extractBitboard(state.board, Stone::WHITE);
+        state.hash = initialHash(state.board);
+    }
+
+    return true;
+}
+
 Position MinimaxAI::findBestMove(
     const Board &board,
     Stone aiColor,
@@ -327,7 +328,8 @@ Position MinimaxAI::findBestMove(
         RuleChecker::extractBitboard(board, Stone::BLACK),
         RuleChecker::extractBitboard(board, Stone::WHITE),
         blackCaptures,
-        whiteCaptures
+        whiteCaptures,
+        initialHash(board)
     };
 
     std::vector<Position> moves = generateMoves(board, aiColor, variant);
@@ -337,47 +339,82 @@ Position MinimaxAI::findBestMove(
 
     transpositionTable.clear();
 
-    Position bestMove = moves.front();
-    int bestScore = -INFINITY_SCORE;
-    int alpha = -INFINITY_SCORE;
-    const int beta = INFINITY_SCORE;
+    const auto deadline =
+        std::chrono::steady_clock::now() +
+        std::chrono::milliseconds(TIME_BUDGET_MS);
 
-    for (const Position &move : moves)
+    Position confirmedBestMove = moves.front();
+
+    for (int depth = 1; depth <= maxDepth_; ++depth)
     {
-        SearchState childState = rootState;
+        Position bestMove = moves.front();
+        int bestScore = -INFINITY_SCORE;
+        int alpha = -INFINITY_SCORE;
+        const int beta = INFINITY_SCORE;
+        bool timedOut = false;
 
-        if (!childState.board.placeStone(move, aiColor))
-            continue;
-
-        const int capturedPairs = RuleChecker::applyCaptures(
-            childState.board,
-            move,
-            aiColor);
-
-        if (aiColor == Stone::BLACK)
-            childState.blackCaptures += capturedPairs;
-        else
-            childState.whiteCaptures += capturedPairs;
-
-        const int score = minimax(
-            childState,
-            maxDepth_ - 1,
-            alpha,
-            beta,
-            opponentOf(aiColor),
-            aiColor,
-            variant);
-
-        if (score > bestScore)
+        try
         {
-            bestScore = score;
-            bestMove = move;
+            for (const Position &move : moves)
+            {
+                SearchState childState = rootState;
+
+                if (!applyMove(childState, move, aiColor))
+                    continue;
+
+                const int score = minimax(
+                    childState,
+                    depth - 1,
+                    alpha,
+                    beta,
+                    opponentOf(aiColor),
+                    aiColor,
+                    variant,
+                    deadline);
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestMove = move;
+                }
+
+                alpha = std::max(alpha, bestScore);
+            }
+        }
+        catch (const TimeUp &)
+        {
+            timedOut = true;
         }
 
-        alpha = std::max(alpha, bestScore);
+        if (timedOut)
+            break;
+
+        confirmedBestMove = bestMove;
+
+        // 500ms is a ceiling, not a target: once a depth's search has found
+        // a forced win/loss, deeper search can't change the decision, so
+        // stop early instead of burning the rest of the budget.
+        if (bestScore >= WIN_SCORE || bestScore <= -WIN_SCORE)
+            break;
+
+        // Search the previous depth's best move first next iteration so
+        // alpha-beta cuts more of the tree.
+        auto it = std::find_if(
+            moves.begin(),
+            moves.end(),
+            [&bestMove](const Position &move)
+            {
+                return move.x == bestMove.x && move.y == bestMove.y;
+            });
+
+        if (it != moves.begin() && it != moves.end())
+            std::rotate(moves.begin(), it, it + 1);
+
+        if (std::chrono::steady_clock::now() >= deadline)
+            break;
     }
 
-    return bestMove;
+    return confirmedBestMove;
 }
 
 int MinimaxAI::minimax(
@@ -387,22 +424,25 @@ int MinimaxAI::minimax(
     int beta,
     Stone currentPlayer,
     Stone aiColor,
-    RuleVariant variant) const
+    RuleVariant variant,
+    std::chrono::steady_clock::time_point deadline) const
 {
 
-    auto search = [this, aiColor, variant](auto &&self,
+    auto search = [this, aiColor, variant, deadline](auto &&self,
                          const SearchState &node,
                          int remainingDepth,
                          int localAlpha,
                          int localBeta,
                          Stone player) -> int
     {
+        if (std::chrono::steady_clock::now() >= deadline)
+            throw TimeUp{};
+
         const int originalAlpha = localAlpha;
         const int originalBeta = localBeta;
 
-        const std::uint64_t hash = initialHash(node.board);
         const std::uint64_t key = positionKey(
-            hash,
+            node.hash,
             node.blackCaptures,
             node.whiteCaptures,
             player,
@@ -450,18 +490,8 @@ int MinimaxAI::minimax(
             const Position &move = moves[i];
             SearchState child = node;
 
-            if (!child.board.placeStone(move, player))
+            if (!this->applyMove(child, move, player))
                 continue;
-
-            const int captures = RuleChecker::applyCaptures(
-                child.board,
-                move,
-                player);
-
-            if (player == Stone::BLACK)
-                child.blackCaptures += captures;
-            else
-                child.whiteCaptures += captures;
 
             int score;
 
@@ -584,24 +614,14 @@ std::optional<int> MinimaxAI::getTerminalScore(
     }
     else
     {
-        const Bitboard blackBitboard =
-            RuleChecker::extractBitboard(
-                state.board,
-                Stone::BLACK);
-
-        const Bitboard whiteBitboard =
-            RuleChecker::extractBitboard(
-                state.board,
-                Stone::WHITE);
-
         const bool blackHasFive =
-            RuleChecker::hasFiveInARow(blackBitboard);
+            RuleChecker::hasFiveInARow(state.black);
 
         const bool whiteHasFive =
-            RuleChecker::hasFiveInARow(whiteBitboard);
+            RuleChecker::hasFiveInARow(state.white);
 
         const bool blackHasOverline =
-            RuleChecker::hasOverline(blackBitboard);
+            RuleChecker::hasOverline(state.black);
 
         if (variant == RuleVariant::RENJU && blackHasOverline)
             winner = Stone::WHITE;
@@ -633,84 +653,14 @@ int MinimaxAI::evaluate(
 {
     const Stone opponent = opponentOf(aiColor);
 
-    
-    int aiScore = 0;
-    int opponentScore = 0;
+    const Bitboard &aiBitboard =
+        aiColor == Stone::BLACK ? state.black : state.white;
 
-    for (const auto &direction : DIRECTIONS)
-    {
-        const int dr = direction[0];
-        const int dc = direction[1];
+    const Bitboard &opponentBitboard =
+        opponent == Stone::BLACK ? state.black : state.white;
 
-        for (int row = 0; row < Board::HEIGHT; ++row)
-        {
-            for (int column = 0; column < Board::WIDTH; ++column)
-            {
-                const int endRow = row + 4 * dr;
-                const int endColumn = column + 4 * dc;
-
-                if (!isInsideBoard(endRow, endColumn))
-                    continue;
-
-                int aiCount = 0;
-                int opponentCount = 0;
-
-                for (int step = 0; step < 5; ++step)
-                {
-                    Position position{
-                        row + step * dr,
-                        column + step * dc};
-
-                    if (state.board.hasStone(position, aiColor))
-                        ++aiCount;
-                    else if (state.board.hasStone(position, opponent))
-                        ++opponentCount;
-                }
-
-                if (opponentCount == 0)
-                {
-                    int openEnds = 0;
-                    Position before{row - dr, column - dc};
-                    Position after{endRow + dr, endColumn + dc};
-
-                    if (isInsideBoard(before.x, before.y) &&
-                        state.board.isEmpty(before))
-                    {
-                        ++openEnds;
-                    }
-
-                    if (isInsideBoard(after.x, after.y) &&
-                        state.board.isEmpty(after))
-                    {
-                        ++openEnds;
-                    }
-
-                    aiScore += lineScore(aiCount, openEnds);
-                }
-
-                if (aiCount == 0)
-                {
-                    int openEnds = 0;
-                    Position before{row - dr, column - dc};
-                    Position after{endRow + dr, endColumn + dc};
-
-                    if (isInsideBoard(before.x, before.y) &&
-                        state.board.isEmpty(before))
-                    {
-                        ++openEnds;
-                    }
-
-                    if (isInsideBoard(after.x, after.y) &&
-                        state.board.isEmpty(after))
-                    {
-                        ++openEnds;
-                    }
-
-                    opponentScore += lineScore(opponentCount, openEnds);
-                }
-            }
-        }
-    }
+    const int aiScore = evaluateColor(aiBitboard, opponentBitboard);
+    const int opponentScore = evaluateColor(opponentBitboard, aiBitboard);
 
     const int aiCaptures = aiColor == Stone::BLACK
                                ? state.blackCaptures

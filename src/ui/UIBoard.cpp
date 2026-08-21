@@ -83,7 +83,13 @@ void UIBoard::init()
                 }
             }
         }
-        performAiTurn();
+        // Render the frame (with any stone just placed by the human) before
+        // performAiTurn() blocks the loop for up to the AI's time budget —
+        // otherwise the human's move never appears on screen until the AI
+        // has already finished thinking.
+        if (isAiTurnPending())
+            statusMessage_ = "AI is thinking";
+
         mousePosition_ = sf::Mouse::getPosition(window_);
         window_.clear();
         if (screen_ == Screen::ModeSelect)
@@ -100,6 +106,8 @@ void UIBoard::init()
         }
 
         window_.display();
+
+        performAiTurn();
     }
 }
 
@@ -344,6 +352,17 @@ bool UIBoard::playMove(const Position &boardPos)
     currentTurn_ = (currentTurn_ == Stone::BLACK) ? Stone::WHITE : Stone::BLACK;
     statusMessage_ = "Game in progress";
     return true;
+}
+
+bool UIBoard::isAiTurnPending() const
+{
+    return screen_ == Screen::Game &&
+           mode_ == GameMode::HumanVsAI &&
+           !gameOver_ &&
+           currentTurn_ == aiColor_ &&
+           ruleVariant_ != RuleVariant::SWAP &&
+           ruleVariant_ != RuleVariant::SWAP2 &&
+           openingManager_.isOpeningFinished();
 }
 
 void UIBoard::performAiTurn()

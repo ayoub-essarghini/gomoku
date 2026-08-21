@@ -46,7 +46,7 @@ private:
     Board board_;
     Stone currentTurn_{Stone::BLACK};
     Stone aiColor_{Stone::WHITE};
-    MinimaxAI ai_{6};
+    MinimaxAI ai_{10};
     bool gameOver_{false};
 
     RuleVariant ruleVariant_{RuleVariant::STANDARD};
@@ -67,6 +67,7 @@ private:
     bool handlePanelClick(sf::Vector2i mousePos);
     bool playMove(const Position &position);
     void performAiTurn();
+    bool isAiTurnPending() const;
 
     void drawBoard();
     void drawLines();

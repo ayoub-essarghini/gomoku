@@ -3,6 +3,7 @@
 #include <gomoku/Board.hpp>
 #include <gomoku/Rules.hpp>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 #include <bit>
@@ -30,6 +31,8 @@ private:
 
         int blackCaptures;
         int whiteCaptures;
+
+        std::uint64_t hash = 0;
     };
 
     static constexpr int WIN_SCORE = 100'000'000;
@@ -41,6 +44,8 @@ private:
 
     static constexpr int WINDOW_MARGIN = 1;
 
+    static constexpr int TIME_BUDGET_MS = 500;
+
     int maxDepth_;
 
     int minimax(
@@ -50,7 +55,13 @@ private:
         int beta,
         Stone currentPlayer,
         Stone aiColor,
-        RuleVariant variant) const;
+        RuleVariant variant,
+        std::chrono::steady_clock::time_point deadline) const;
+
+    bool applyMove(
+        SearchState &state,
+        const Position &move,
+        Stone player) const;
 
     std::optional<int> getTerminalScore(
         const SearchState &state,

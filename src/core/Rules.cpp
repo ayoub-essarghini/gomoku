@@ -306,3 +306,83 @@ int RuleChecker::applyCaptures(Board& board, const Position& pos, Stone color) {
  
     return capturedPairs;
 }
+
+
+WinLine RuleChecker::findWinningLine(const Bitboard& board)
+{
+    // horizontal
+    for (int r = 0; r < Board::HEIGHT; ++r)
+    {
+        for (int c = 0; c <= Board::WIDTH - 5; ++c)
+        {
+            uint32_t mask = 0x1FU << c;
+            if ((board.rows[r] & mask) == mask)
+            {
+                WinLine result{true, {}};
+                for (int i = 0; i < 5; ++i)
+                    result.cells.push_back({r, c + i});
+                return result;
+            }
+        }
+    }
+
+    // vertical
+    for (int c = 0; c < Board::WIDTH; ++c)
+    {
+        uint32_t bit = 1U << c;
+        for (int r = 0; r <= Board::HEIGHT - 5; ++r)
+        {
+            bool all = true;
+            for (int i = 0; i < 5; ++i)
+                if (!(board.rows[r + i] & bit)) { all = false; break; }
+
+            if (all)
+            {
+                WinLine result{true, {}};
+                for (int i = 0; i < 5; ++i)
+                    result.cells.push_back({r + i, c});
+                return result;
+            }
+        }
+    }
+
+    // diagonal down-right
+    for (int r = 0; r <= Board::HEIGHT - 5; ++r)
+    {
+        for (int c = 0; c <= Board::WIDTH - 5; ++c)
+        {
+            bool all = true;
+            for (int i = 0; i < 5; ++i)
+                if (!(board.rows[r + i] & (1U << (c + i)))) { all = false; break; }
+
+            if (all)
+            {
+                WinLine result{true, {}};
+                for (int i = 0; i < 5; ++i)
+                    result.cells.push_back({r + i, c + i});
+                return result;
+            }
+        }
+    }
+
+    // diagonal down-left
+    for (int r = 0; r <= Board::HEIGHT - 5; ++r)
+    {
+        for (int c = 4; c < Board::WIDTH; ++c)
+        {
+            bool all = true;
+            for (int i = 0; i < 5; ++i)
+                if (!(board.rows[r + i] & (1U << (c - i)))) { all = false; break; }
+
+            if (all)
+            {
+                WinLine result{true, {}};
+                for (int i = 0; i < 5; ++i)
+                    result.cells.push_back({r + i, c - i});
+                return result;
+            }
+        }
+    }
+
+    return {};
+}

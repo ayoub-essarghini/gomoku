@@ -9,11 +9,18 @@
 #include <bit>
 #include <cstdint>
 
+enum class Difficulty : uint8_t
+{
+    EASY,
+    MEDIUM,
+    HARD
+};
+
 class MinimaxAI
 {
 public:
     explicit MinimaxAI(int maxDepth = 3);
-
+    void setDifficulty(Difficulty level);
     Position findBestMove(
         const Board &board,
         Stone aiColor,
@@ -34,7 +41,7 @@ private:
 
         std::uint64_t hash = 0;
     };
-
+    int timeBudgetMs_ = 500;
     static constexpr int WIN_SCORE = 100'000'000;
     static constexpr int INFINITY_SCORE = 1'000'000'000;
 

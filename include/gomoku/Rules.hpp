@@ -20,6 +20,13 @@ enum class Swap2Phase : uint8_t {
 struct Bitboard {
     std::array<uint32_t, 19> rows{};
 };
+
+struct WinLine {
+    bool found = false;
+    std::vector<Position> cells;
+};
+
+
 class RuleChecker {
     public:
         static Bitboard extractBitboard(const Board& board, Stone color);
@@ -28,6 +35,7 @@ class RuleChecker {
         static bool isValidProMove(int moveCount, const Position& pos);
         static bool isRenjuFoul(const Board& board, const Position& pos);
         static int applyCaptures(Board& board, const Position& pos, Stone color);
+        static WinLine findWinningLine(const Bitboard& board);
 };
 class OpeningManager {
     public:

@@ -18,6 +18,32 @@ UIBoard::UIBoard()
     resetGameState();
 }
 
+std::optional<Suggestion> UIBoard::requestSuggestion()
+{
+    if (gameOver_)
+        return std::nullopt;
+
+    auto start = std::chrono::steady_clock::now();
+
+    Position best = ai_.findBestMove(
+        board_,
+        currentTurn_,
+        ruleVariant_,
+        blackCaptures_,
+        whiteCaptures_);
+
+    auto end = std::chrono::steady_clock::now();
+    int elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end - start).count();
+
+    if (best.x < 0 || best.y < 0)
+        return std::nullopt;
+
+    return Suggestion{ best, elapsed };
+}
+
+
+
 void UIBoard::resetGameState()
 {
     board_.reset();
@@ -32,6 +58,7 @@ void UIBoard::resetGameState()
     forbiddenPos_ = Position{-1, -1};
     statusMessage_ = "Game in progress";
     winnerName_ = "";
+    winningLine_ = WinLine{};
 }
 
 std::string UIBoard::getWinnerName() const
@@ -207,6 +234,14 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
         }
     }
 
+    if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 610 && mousePos.y <= 635)
+    {
+        uint8_t next = (static_cast<uint8_t>(difficulty_) + 1) % 3;
+        difficulty_ = static_cast<Difficulty>(next);
+        ai_.setDifficulty(difficulty_);
+        return true;
+    }
+
     return false;
 }
 
@@ -335,6 +370,7 @@ bool UIBoard::playMove(const Position &boardPos)
             gameOver_ = true;
             winnerName_ = (currentTurn_ == Stone::BLACK) ? "Black" : "White";
             statusMessage_ = winnerName_ + " Wins!";
+            winningLine_ = RuleChecker::findWinningLine(currentBB);
         }
         return true;
     }
@@ -422,6 +458,33 @@ void UIBoard::drawBoard()
 
     for (const auto &pos : board_.getStones(Stone::WHITE))
         drawStone(pos, Stone::WHITE);
+    drawWinLine();
+}
+
+void UIBoard::drawWinLine()
+{
+    if (winningLine_.cells.size() < 2)
+        return;
+
+    sf::Vector2f start(
+        BOARD_OFFSET_X + winningLine_.cells.front().y * CELL_SIZE,
+        BOARD_OFFSET_Y + winningLine_.cells.front().x * CELL_SIZE);
+    sf::Vector2f end(
+        BOARD_OFFSET_X + winningLine_.cells.back().y * CELL_SIZE,
+        BOARD_OFFSET_Y + winningLine_.cells.back().x * CELL_SIZE);
+
+    sf::Vector2f dir = end - start;
+    float length = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+
+    sf::RectangleShape lineShape(sf::Vector2f(length, 6.f));
+    lineShape.setOrigin({0.f, 3.f});
+    lineShape.setPosition(start);
+
+    float angle = std::atan2(dir.y, dir.x) * 180.f / 3.14159265f;
+    lineShape.setRotation(sf::degrees(angle));
+    lineShape.setFillColor(sf::Color(220, 30, 30, 230));
+
+    window_.draw(lineShape);
 }
 
 void UIBoard::drawLines()
@@ -471,7 +534,7 @@ void UIBoard::drawGameOverOverlay()
 {
     sf::RectangleShape backdrop(sf::Vector2f(640.f, 250.f));
     backdrop.setPosition({80.f, 285.f});
-    backdrop.setFillColor(sf::Color(20, 23, 26, 240));
+    backdrop.setFillColor(sf::Color(20, 23, 26, 180));
     backdrop.setOutlineThickness(4.f);
     backdrop.setOutlineColor(sf::Color(222, 184, 135));
     window_.draw(backdrop);
@@ -491,6 +554,7 @@ void UIBoard::drawGameOverOverlay()
     drawText("Use [ New Game ] or [ Mode ] to continue", 130.f, 485.f, 16);
 }
 
+
 void UIBoard::drawPanel()
 {
     sf::RectangleShape panel(sf::Vector2f(300.f, 860.f));
@@ -506,6 +570,12 @@ void UIBoard::drawPanel()
     else if (ruleVariant_ == RuleVariant::SWAP) ruleStr = "Swap";
     else if (ruleVariant_ == RuleVariant::SWAP2) ruleStr = "Swap2";
     else if (ruleVariant_ == RuleVariant::RENJU) ruleStr = "Renju";
+
+    auto suggestion_move = requestSuggestion();
+
+    std::string diffStr = "Medium";
+    if (difficulty_ == Difficulty::EASY) diffStr = "Easy";
+    else if (difficulty_ == Difficulty::HARD) diffStr = "Hard";
 
     drawText("Gomoku", 830.f, 40.f, 32);
 
@@ -528,12 +598,22 @@ void UIBoard::drawPanel()
     drawText("White: " + std::to_string(whiteCaptures_), 830.f, 315.f, 18);
 
     drawText("AI time: " + std::to_string(static_cast<int>(lastAiTimeMs_)) + " ms", 830.f, 370.f, 18);
-    drawText("Suggestion: --", 830.f, 400.f, 18);
+    if (suggestion_move.has_value()) {
+        drawText(
+            "Suggestion: " + std::to_string(suggestion_move->position.x) +
+            ", " + std::to_string(suggestion_move->position.y),
+            830.f,
+            400.f,
+            18
+        );
+    }
 
     drawText("[ New Game ]", 830.f, 460.f, 20);
     drawText("[ Suggest Move ]", 830.f, 500.f, 20);
     drawText("[ Mode ]", 830.f, 540.f, 20);
+    
 
+    drawText("[ Difficulty: " + diffStr + " ]", 830.f, 610.f, 18);
     // Render Swap/Swap2 options inside side panel when active
     if ((ruleVariant_ == RuleVariant::SWAP2 || ruleVariant_ == RuleVariant::SWAP)
         && !openingManager_.isOpeningFinished())
@@ -596,6 +676,7 @@ bool UIBoard::handleModeSelectClick(sf::Vector2i mousePos)
     if (isInsideRect(mousePos, humanVsAiButton))
     {
         mode_ = GameMode::HumanVsAI;
+        ai_.setDifficulty(difficulty_); 
 
         if (ruleVariant_ == RuleVariant::SWAP || ruleVariant_ == RuleVariant::SWAP2)
             ruleVariant_ = RuleVariant::STANDARD;

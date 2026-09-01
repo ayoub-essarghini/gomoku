@@ -30,6 +30,18 @@ struct Suggestion {
     int timeMs;
 };
 
+struct GameSnapshot
+{
+    Board board;
+    Stone currentTurn;
+    int blackCaptures;
+    int whiteCaptures;
+    bool gameOver;
+    std::string winnerName;
+    std::string statusMessage;
+    WinLine winningLine;
+};
+
 class UIBoard {
 public:
     UIBoard();
@@ -90,4 +102,13 @@ private:
     sf::Color getButtonColor(const sf::FloatRect &rect) const;
 
     std::optional<Suggestion> requestSuggestion();
+    std::optional<Suggestion> currentSuggestion_;
+    
+    std::vector<GameSnapshot> historyStack_;
+    std::vector<GameSnapshot> redoStack_;
+
+    GameSnapshot captureSnapshot() const;
+    void restoreSnapshot(const GameSnapshot& snap);
+    void undoMove();
+    void redoMove();
 };

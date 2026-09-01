@@ -59,6 +59,8 @@ void UIBoard::resetGameState()
     statusMessage_ = "Game in progress";
     winnerName_ = "";
     winningLine_ = WinLine{};
+    historyStack_.clear();
+    redoStack_.clear();
 }
 
 std::string UIBoard::getWinnerName() const
@@ -242,6 +244,27 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
         return true;
     }
 
+    // [ Undo ] Button Area
+    if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 640 && mousePos.y <= 665)
+    {
+        undoMove();
+        return true;
+    }
+
+    // [ Redo ] Button Area
+    if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 675 && mousePos.y <= 700)
+    {
+        redoMove();
+        return true;
+    }
+
+    if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 640 && mousePos.y <= 665)
+    {
+        if (!(mode_ == GameMode::HumanVsAI && currentTurn_ == aiColor_))
+            undoMove();
+        return true;
+    }
+
     return false;
 }
 
@@ -315,10 +338,16 @@ bool UIBoard::playMove(const Position &boardPos)
         }
     }
 
+    historyStack_.push_back(captureSnapshot()); 
+    redoStack_.clear();
     if (!board_.placeStone(boardPos, currentTurn_))
+    {
+        historyStack_.pop_back();
         return false;
+    }
 
-   
+    currentSuggestion_.reset();
+
     int captured = RuleChecker::applyCaptures(board_, boardPos, currentTurn_);
     if (captured > 0)
     {
@@ -443,6 +472,7 @@ void UIBoard::performAiTurn()
 
     if (!playMove(selectedMove))
         statusMessage_ = "AI selected an invalid move";
+    
 }
 
 void UIBoard::drawBoard()
@@ -614,6 +644,9 @@ void UIBoard::drawPanel()
     
 
     drawText("[ Difficulty: " + diffStr + " ]", 830.f, 610.f, 18);
+
+    drawText("[ Undo ]", 830.f, 645.f, 20);
+    drawText("[ Redo ]", 830.f, 680.f, 20);
     // Render Swap/Swap2 options inside side panel when active
     if ((ruleVariant_ == RuleVariant::SWAP2 || ruleVariant_ == RuleVariant::SWAP)
         && !openingManager_.isOpeningFinished())
@@ -787,4 +820,51 @@ UIBoard::~UIBoard()
 {
     if (window_.isOpen())
         window_.close();
+}
+
+GameSnapshot UIBoard::captureSnapshot() const
+{
+    return GameSnapshot{
+        board_,
+        currentTurn_,
+        blackCaptures_,
+        whiteCaptures_,
+        gameOver_,
+        winnerName_,
+        statusMessage_,
+        winningLine_
+    };
+}
+
+void UIBoard::restoreSnapshot(const GameSnapshot& snap)
+{
+    board_          = snap.board;
+    currentTurn_    = snap.currentTurn;
+    blackCaptures_  = snap.blackCaptures;
+    whiteCaptures_  = snap.whiteCaptures;
+    gameOver_       = snap.gameOver;
+    winnerName_     = snap.winnerName;
+    statusMessage_  = snap.statusMessage;
+    winningLine_    = snap.winningLine;
+    currentSuggestion_.reset();
+}
+
+void UIBoard::undoMove()
+{
+    if (historyStack_.empty())
+        return;
+
+    redoStack_.push_back(captureSnapshot());
+    restoreSnapshot(historyStack_.back());
+    historyStack_.pop_back();
+}
+
+void UIBoard::redoMove()
+{
+    if (redoStack_.empty())
+        return;
+
+    historyStack_.push_back(captureSnapshot());
+    restoreSnapshot(redoStack_.back());
+    redoStack_.pop_back();
 }

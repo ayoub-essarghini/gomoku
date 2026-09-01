@@ -1100,15 +1100,15 @@ void MinimaxAI::setDifficulty(Difficulty level)
     switch (level)
     {
         case Difficulty::EASY:
-            maxDepth_ = 2;
+            maxDepth_ = 5;
             timeBudgetMs_ = 150;
             break;
         case Difficulty::MEDIUM:
-            maxDepth_ = 8;
+            maxDepth_ = 10;
             timeBudgetMs_ = 500;
             break;
         case Difficulty::HARD:
-            maxDepth_ = 10;
+            maxDepth_ = 11;
             timeBudgetMs_ = 1500;
             break;
     }

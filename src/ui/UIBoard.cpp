@@ -642,11 +642,12 @@ void UIBoard::drawPanel()
     drawText("[ Suggest Move ]", 830.f, 500.f, 20);
     drawText("[ Mode ]", 830.f, 540.f, 20);
     
-
-    drawText("[ Difficulty: " + diffStr + " ]", 830.f, 610.f, 18);
-
-    drawText("[ Undo ]", 830.f, 645.f, 20);
-    drawText("[ Redo ]", 830.f, 680.f, 20);
+    if(mode_ == GameMode::HumanVsAI){
+        drawText("[ Difficulty: " + diffStr + " ]", 830.f, 610.f, 18);
+    
+        drawText("[ Undo ]", 830.f, 645.f, 20);
+        drawText("[ Redo ]", 830.f, 680.f, 20);
+    }
     // Render Swap/Swap2 options inside side panel when active
     if ((ruleVariant_ == RuleVariant::SWAP2 || ruleVariant_ == RuleVariant::SWAP)
         && !openingManager_.isOpeningFinished())

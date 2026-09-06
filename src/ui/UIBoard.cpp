@@ -101,7 +101,11 @@ void UIBoard::init()
                     if (screen_ == Screen::ModeSelect)
                         handleModeSelectClick(pos);
                     else
-                        handleClick(pos);
+                    {
+                        gameStarted_ = true;
+                         handleClick(pos);
+                    }
+                       
                 }
             }
             if (const auto *mouse = event->getIf<sf::Event::MouseButtonReleased>())
@@ -236,7 +240,7 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
         }
     }
 
-    if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 610 && mousePos.y <= 635)
+    if ((mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 610 && mousePos.y <= 635) && board_.countStones(Stone::BLACK) + board_.countStones(Stone::WHITE) == 0)
     {
         uint8_t next = (static_cast<uint8_t>(difficulty_) + 1) % 3;
         difficulty_ = static_cast<Difficulty>(next);

@@ -71,6 +71,7 @@ private:
     std::string statusMessage_{"Game in progress"};
     std::string winnerName_{""};
     Difficulty difficulty_;
+    bool gameStarted_{false};
     int blackCaptures_{0};
     int whiteCaptures_{0};
     float lastAiTimeMs_{0.f};

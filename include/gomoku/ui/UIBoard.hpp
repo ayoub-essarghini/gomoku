@@ -112,4 +112,5 @@ private:
     void restoreSnapshot(const GameSnapshot& snap);
     void undoMove();
     void redoMove();
+    void drawSuggestionMarker();
 };

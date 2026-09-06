@@ -154,6 +154,13 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
         return true;
     }
 
+    // [ Suggest Move ] Button Area
+    if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 500 && mousePos.y <= 530)
+    {
+        currentSuggestion_ = requestSuggestion();
+        return true;
+    }
+
     // [ Mode ] Button Area
     if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 540 && mousePos.y <= 570)
     {
@@ -251,7 +258,8 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
     // [ Undo ] Button Area
     if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 640 && mousePos.y <= 665)
     {
-        undoMove();
+        if (!(mode_ == GameMode::HumanVsAI && currentTurn_ == aiColor_))
+            undoMove();
         return true;
     }
 
@@ -259,13 +267,6 @@ bool UIBoard::handlePanelClick(sf::Vector2i mousePos)
     if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 675 && mousePos.y <= 700)
     {
         redoMove();
-        return true;
-    }
-
-    if (mousePos.x >= 830 && mousePos.x <= 1030 && mousePos.y >= 640 && mousePos.y <= 665)
-    {
-        if (!(mode_ == GameMode::HumanVsAI && currentTurn_ == aiColor_))
-            undoMove();
         return true;
     }
 
@@ -500,6 +501,7 @@ void UIBoard::drawBoard()
     for (const auto &pos : board_.getStones(Stone::WHITE))
         drawStone(pos, Stone::WHITE);
     drawWinLine();
+    drawSuggestionMarker();
 }
 
 void UIBoard::drawWinLine()
@@ -605,14 +607,12 @@ void UIBoard::drawPanel()
 
     std::string turn = currentTurn_ == Stone::BLACK ? "Black" : "White";
     std::string mode = mode_ == GameMode::HumanVsHuman ? "Human vs Human" : "Human vs AI";
-    
+
     std::string ruleStr = "Standard";
     if (ruleVariant_ == RuleVariant::PRO) ruleStr = "Pro";
     else if (ruleVariant_ == RuleVariant::SWAP) ruleStr = "Swap";
     else if (ruleVariant_ == RuleVariant::SWAP2) ruleStr = "Swap2";
     else if (ruleVariant_ == RuleVariant::RENJU) ruleStr = "Renju";
-
-    auto suggestion_move = requestSuggestion();
 
     std::string diffStr = "Medium";
     if (difficulty_ == Difficulty::EASY) diffStr = "Easy";
@@ -639,26 +639,27 @@ void UIBoard::drawPanel()
     drawText("White: " + std::to_string(whiteCaptures_), 830.f, 315.f, 18);
 
     drawText("AI time: " + std::to_string(static_cast<int>(lastAiTimeMs_)) + " ms", 830.f, 370.f, 18);
-    if (suggestion_move.has_value()) {
+
+    if (currentSuggestion_.has_value())
+    {
         drawText(
-            "Suggestion: " + std::to_string(suggestion_move->position.x) +
-            ", " + std::to_string(suggestion_move->position.y),
-            830.f,
-            400.f,
-            18
+            "Suggestion: " + std::to_string(currentSuggestion_->position.x) +
+            ", " + std::to_string(currentSuggestion_->position.y),
+            830.f, 400.f, 18
         );
     }
 
     drawText("[ New Game ]", 830.f, 460.f, 20);
     drawText("[ Suggest Move ]", 830.f, 500.f, 20);
     drawText("[ Mode ]", 830.f, 540.f, 20);
-    
+
     if(mode_ == GameMode::HumanVsAI){
         drawText("[ Difficulty: " + diffStr + " ]", 830.f, 610.f, 18);
     }
-    
+
     drawText("[ Undo ]", 830.f, 645.f, 20);
     drawText("[ Redo ]", 830.f, 680.f, 20);
+
     // Render Swap/Swap2 options inside side panel when active
     if ((ruleVariant_ == RuleVariant::SWAP2 || ruleVariant_ == RuleVariant::SWAP)
         && !openingManager_.isOpeningFinished())
@@ -677,7 +678,6 @@ void UIBoard::drawPanel()
         }
         else if (phase == Swap2Phase::PLAYER1_CHOICE)
         {
-            // FIX: previously never drawn, matching the missing click handler.
             drawText("-- Player 1: Choose --", 830.f, 580.f, 16);
             drawText("> Play Black", 830.f, 605.f, 16);
             drawText("> Play White", 830.f, 635.f, 16);
@@ -879,4 +879,32 @@ void UIBoard::redoMove()
     historyStack_.push_back(captureSnapshot());
     restoreSnapshot(redoStack_.back());
     redoStack_.pop_back();
+}
+
+void UIBoard::drawSuggestionMarker()
+{
+    if (!currentSuggestion_.has_value())
+        return;
+
+    const Position &pos = currentSuggestion_->position;
+
+    float px = BOARD_OFFSET_X + pos.y * CELL_SIZE;
+    float py = BOARD_OFFSET_Y + pos.x * CELL_SIZE;
+
+    float armLength = STONE_RADIUS * 1.1f;
+    float thickness = 4.f;
+
+    sf::RectangleShape line1(sf::Vector2f(armLength * 2.f, thickness));
+    line1.setOrigin({armLength, thickness / 2.f});
+    line1.setPosition({px, py});
+    line1.setRotation(sf::degrees(45.f));
+    line1.setFillColor(sf::Color(255, 60, 60, 230)); // red-ish X
+    window_.draw(line1);
+
+    sf::RectangleShape line2(sf::Vector2f(armLength * 2.f, thickness));
+    line2.setOrigin({armLength, thickness / 2.f});
+    line2.setPosition({px, py});
+    line2.setRotation(sf::degrees(-45.f));
+    line2.setFillColor(sf::Color(255, 60, 60, 230));
+    window_.draw(line2);
 }

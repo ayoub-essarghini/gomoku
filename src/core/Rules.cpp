@@ -279,30 +279,142 @@ namespace {
  
 } // namespace
  
-int RuleChecker::applyCaptures(Board& board, const Position& pos, Stone color) {
+int RuleChecker::applyCaptures(Board& board, const Position& pos, Stone color)
+{
+    if (!board.hasStone(pos, color))
+        return 0;
+
     const Stone opponent = (color == Stone::BLACK) ? Stone::WHITE : Stone::BLACK;
     int capturedPairs = 0;
- 
-    for (const auto& d : CAPTURE_DIRS) {
-        const int dx = d[0];
-        const int dy = d[1];
- 
-        Position p1{pos.x + dx,     pos.y + dy};       // nearest neighbor
-        Position p2{pos.x + 2 * dx, pos.y + 2 * dy};    // second neighbor
-        Position p3{pos.x + 3 * dx, pos.y + 3 * dy};    // far flank
- 
-        if (!inBounds(p3)) continue;
- 
+
+    for (const auto& d : CAPTURE_DIRS)
+    {
+        const int dx = d[0], dy = d[1];
+        Position p1{pos.x + dx,     pos.y + dy};
+        Position p2{pos.x + 2*dx,   pos.y + 2*dy};
+        Position p3{pos.x + 3*dx,   pos.y + 3*dy};
+
+        if (!inBounds(p1) || !inBounds(p2) || !inBounds(p3))
+            continue;
+
         if (board.hasStone(p1, opponent) &&
             board.hasStone(p2, opponent) &&
             board.hasStone(p3, color))
         {
-            
             board.removeStone(p1);
             board.removeStone(p2);
             ++capturedPairs;
         }
     }
- 
     return capturedPairs;
+}
+
+
+bool RuleChecker::isFiveCapturable(const Board& board,const WinLine& line, Stone color)
+{
+    const Stone opponent = (color == Stone::BLACK) ? Stone::WHITE : Stone::BLACK;
+
+    for (const Position& stone : line.cells)
+    {
+        for (const auto& d : CAPTURE_DIRS)
+        {
+            Position neighbor{stone.x + d[0], stone.y + d[1]};
+            if (!inBounds(neighbor) || !board.hasStone(neighbor, color))
+                continue;
+
+            Position before{stone.x - d[0],       stone.y - d[1]};
+            Position after {neighbor.x + d[0],    neighbor.y + d[1]};
+
+            bool beforeOk = inBounds(before);
+            bool afterOk  = inBounds(after);
+
+            if (beforeOk && board.hasStone(before, opponent) &&
+                afterOk  && board.isEmpty(after))
+                return true;
+
+            if (afterOk  && board.hasStone(after, opponent) &&
+                beforeOk && board.isEmpty(before))
+                return true;
+        }
+    }
+    return false;
+}
+
+WinLine RuleChecker::findWinningLine(const Bitboard& board)
+{
+    // horizontal
+    for (int r = 0; r < Board::HEIGHT; ++r)
+    {
+        for (int c = 0; c <= Board::WIDTH - 5; ++c)
+        {
+            uint32_t mask = 0x1FU << c;
+            if ((board.rows[r] & mask) == mask)
+            {
+                WinLine result{true, {}};
+                for (int i = 0; i < 5; ++i)
+                    result.cells.push_back({r, c + i});
+                return result;
+            }
+        }
+    }
+
+    // vertical
+    for (int c = 0; c < Board::WIDTH; ++c)
+    {
+        uint32_t bit = 1U << c;
+        for (int r = 0; r <= Board::HEIGHT - 5; ++r)
+        {
+            bool all = true;
+            for (int i = 0; i < 5; ++i)
+                if (!(board.rows[r + i] & bit)) { all = false; break; }
+
+            if (all)
+            {
+                WinLine result{true, {}};
+                for (int i = 0; i < 5; ++i)
+                    result.cells.push_back({r + i, c});
+                return result;
+            }
+        }
+    }
+
+    // diagonal down-right
+    for (int r = 0; r <= Board::HEIGHT - 5; ++r)
+    {
+        for (int c = 0; c <= Board::WIDTH - 5; ++c)
+        {
+            bool all = true;
+            for (int i = 0; i < 5; ++i)
+                if (!(board.rows[r + i] & (1U << (c + i)))) { all = false; break; }
+
+            if (all)
+            {
+                WinLine result{true, {}};
+                for (int i = 0; i < 5; ++i)
+                    result.cells.push_back({r + i, c + i});
+                return result;
+            }
+        }
+    }
+
+    // diagonal down-left
+    for (int r = 0; r <= Board::HEIGHT - 5; ++r)
+    {
+        for (int c = 4; c < Board::WIDTH; ++c)
+        {
+            bool all = true;
+            for (int i = 0; i < 5; ++i)
+                if (!(board.rows[r + i] & (1U << (c - i)))) { all = false; break; }
+
+            if (all)
+            {
+                WinLine result{true, {}};
+                for (int i = 0; i < 5; ++i)
+                    result.cells.push_back({r + i, c - i});
+                return result;
+            }
+        }
+    }
+
+    return {};
 }

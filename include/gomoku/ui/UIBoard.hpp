@@ -25,6 +25,23 @@ enum class Screen {
     Game
 };
 
+struct Suggestion {
+    Position position;
+    int timeMs;
+};
+
+struct GameSnapshot
+{
+    Board board;
+    Stone currentTurn;
+    int blackCaptures;
+    int whiteCaptures;
+    bool gameOver;
+    std::string winnerName;
+    std::string statusMessage;
+    WinLine winningLine;
+};
+
 class UIBoard {
 public:
     UIBoard();
@@ -48,12 +65,12 @@ private:
     Stone aiColor_{Stone::WHITE};
     MinimaxAI ai_{10};
     bool gameOver_{false};
-
+    WinLine winningLine_;
     RuleVariant ruleVariant_{RuleVariant::STANDARD};
     OpeningManager openingManager_{RuleVariant::STANDARD};
     std::string statusMessage_{"Game in progress"};
     std::string winnerName_{""};
-
+    Difficulty difficulty_;
     int blackCaptures_{0};
     int whiteCaptures_{0};
     float lastAiTimeMs_{0.f};
@@ -76,11 +93,22 @@ private:
     void drawGameOverOverlay();
     void drawText(const std::string &text, float x, float y, unsigned int size);
     void drawModeSelect();
-
+    void drawWinLine();
     void initParticles();
     void updateParticles();
     void drawParticles();
 
     bool isInsideRect(sf::Vector2i mousePos, const sf::FloatRect &rect) const;
     sf::Color getButtonColor(const sf::FloatRect &rect) const;
+
+    std::optional<Suggestion> requestSuggestion();
+    std::optional<Suggestion> currentSuggestion_;
+    
+    std::vector<GameSnapshot> historyStack_;
+    std::vector<GameSnapshot> redoStack_;
+
+    GameSnapshot captureSnapshot() const;
+    void restoreSnapshot(const GameSnapshot& snap);
+    void undoMove();
+    void redoMove();
 };

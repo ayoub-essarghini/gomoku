@@ -36,6 +36,8 @@ class RuleChecker {
         static bool isRenjuFoul(const Board& board, const Position& pos);
         static int applyCaptures(Board& board, const Position& pos, Stone color);
         static WinLine findWinningLine(const Bitboard& board);
+        static bool isFiveCapturable(const Board& board,const WinLine& line, Stone color);
+
 };
 class OpeningManager {
     public:

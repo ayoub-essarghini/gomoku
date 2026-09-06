@@ -388,18 +388,25 @@ bool UIBoard::playMove(const Position &boardPos)
 
     if (RuleChecker::hasFiveInARow(currentBB))
     {
+        WinLine line = RuleChecker::findWinningLine(currentBB);
         if (ruleVariant_ == RuleVariant::RENJU && currentTurn_ == Stone::BLACK && RuleChecker::hasOverline(currentBB))
         {
             gameOver_ = true;
             winnerName_ = "White";
             statusMessage_ = "Foul: Black created Overline (6+)";
         }
+        else if (RuleChecker::isFiveCapturable(board_, line, currentTurn_)){
+                
+            statusMessage_ = "Five formed but capturable — game continues";
+            currentTurn_  = (currentTurn_ == Stone::BLACK) ? Stone::WHITE : Stone::BLACK;
+            return false;
+        }
         else
         {
             gameOver_ = true;
             winnerName_ = (currentTurn_ == Stone::BLACK) ? "Black" : "White";
             statusMessage_ = winnerName_ + " Wins!";
-            winningLine_ = RuleChecker::findWinningLine(currentBB);
+            winningLine_ = line;
         }
         return true;
     }

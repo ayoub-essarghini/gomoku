@@ -340,7 +340,7 @@ This project explores several problems that extend beyond board games:
 
 <div align="center">
 
-**Built by [Ayoub Es Sarghini](https://github.com/ayoub-essarghini)**
+**Built by [Ayoub Es Sarghini](https://github.com/ayoub-essarghini) & [Hassan Lakhal](https://github.com/hassanlakhal)**
 
 [Portfolio](https://www.ayoub-essarghini.com/) · [LinkedIn](https://www.linkedin.com/in/ayoub-es-sarghini-839973212)
 
